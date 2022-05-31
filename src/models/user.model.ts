@@ -1,4 +1,5 @@
-import {Entity, model, property} from '@loopback/repository';
+import {Entity, model, property, belongsTo} from '@loopback/repository';
+import {Group} from './group.model';
 
 @model()
 export class User extends Entity {
@@ -30,6 +31,8 @@ export class User extends Entity {
   })
   password: string;
 
+  @belongsTo(() => Group)
+  groupId: number;
 
   constructor(data?: Partial<User>) {
     super(data);

@@ -21,7 +21,7 @@ import {
    get,
   getModelSchemaRef, HttpErrors,
   param,
-  // patch,
+  patch,
   post,
   // put,
   requestBody,
@@ -277,6 +277,27 @@ export class UserController {
 
   }
 
+  @patch('/users/{id}')
+  @response(204, {
+    description: 'User PATCH success',
+  })
+  async updateById(
+    @param.path.number('id') id: number,
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(User, {
+            partial: true,
+            exclude: ['id', 'password', 'username', 'email']
+          }),
+        },
+      },
+    })
+    user: User,
+  ): Promise<void> {
+    await this.userRepository.updateById(id, user);
+  }
+
 
 
 
@@ -345,23 +366,7 @@ export class UserController {
 //     return this.userRepository.findById(id, filter);
 //   }
 
-//   @patch('/users/{id}')
-//   @response(204, {
-//     description: 'User PATCH success',
-//   })
-//   async updateById(
-//     @param.path.number('id') id: number,
-//     @requestBody({
-//       content: {
-//         'application/json': {
-//           schema: getModelSchemaRef(User, {partial: true}),
-//         },
-//       },
-//     })
-//     user: User,
-//   ): Promise<void> {
-//     await this.userRepository.updateById(id, user);
-//   }
+
 
 //   @put('/users/{id}')
 //   @response(204, {
