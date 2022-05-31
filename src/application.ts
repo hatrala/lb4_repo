@@ -31,7 +31,7 @@ export class MovieApiApplication extends BootMixin(
   constructor(options: ApplicationConfig = {}) {
     super(options);
 
-
+    
     // Mount authentication system
     this.component(AuthenticationComponent);
     // Mount jwt component

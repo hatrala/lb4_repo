@@ -18,7 +18,9 @@ export class User extends Entity {
     type: 'number',
     id: true,
     generated: false,
-    required: true,
+    required: false,
+    default: 0,
+    forceid: false
   })
   id: number;
 
