@@ -37,9 +37,9 @@ export class NonDbService {
     }
     }
 
-    await Promise.all([verifyEmail(), verifyPassWord()]).then(result =>{
+    await Promise.race([verifyEmail(), verifyPassWord()]).then(result =>{
 
-      if(result){
+      if(typeof result === typeof 'string'){
 
         throw new HttpErrors.NotAcceptable(`${result}`)
 
