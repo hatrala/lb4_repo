@@ -76,7 +76,7 @@ export class UserController {
         'application/json': {
           schema: getModelSchemaRef(User, {
             title: 'NewUser',
-            exclude: ['id'],
+            exclude: ['id', 'groupId'],
           }),
         },
       },
@@ -178,7 +178,7 @@ export class UserController {
   // })
   // async whoAmI(): Promise<void> {}
 
-  @patch('/users/{id}')
+  @patch('/updateGroup/{id}')
   @response(204, {
     description: 'User PATCH success',
   })
@@ -254,7 +254,7 @@ export class UserController {
         'application/json': {
           schema: getModelSchemaRef(User,{
           includeRelations: true,
-          
+
         }),
         },
       },
