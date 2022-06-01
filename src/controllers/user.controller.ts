@@ -178,12 +178,12 @@ export class UserController {
   // })
   // async whoAmI(): Promise<void> {}
 
-  @patch('/updateGroup/{id}')
+  @patch('/updateGroupId/{userId}')
   @response(204, {
     description: 'User PATCH success',
   })
   async updateById(
-    @param.path.number('id') id: number,
+    @param.path.number('userId') id: number,
     @requestBody({
       content: {
         'application/json': {
