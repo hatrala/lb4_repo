@@ -9,7 +9,7 @@ export class UserGroupController {
     public userRepository: UserRepository,
   ) {}
 
-  @get('/users/{id}/group', {
+  @get('/get-groupInfor-by-userId/{userId}', {
     responses: {
       '200': {
         description: 'Group belonging to User',
@@ -22,10 +22,10 @@ export class UserGroupController {
     },
   })
   async getGroup(
-    @param.path.number('id') id: typeof User.prototype.id,
+    @param.path.number('userId') id: typeof User.prototype.id,
   ): Promise<Group> {
     const userGroup = await this.userRepository.group(id);
-    
+
     if (!userGroup) {
       throw new HttpErrors[404]('This user has not belong to any group');
     }
