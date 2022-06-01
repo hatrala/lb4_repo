@@ -74,8 +74,8 @@ export class ValidateService {
         }
       }
 
-      await Promise.race([checkDublicateName(), checkDublicateEmail()]).then(result =>{
-        if(result === false){
+      await Promise.all([checkDublicateName(), checkDublicateEmail()]).then(result =>{
+        if(result[0] === false || result[1] === false){
           throw new HttpErrors.NotAcceptable("User Exited")
         }
       })

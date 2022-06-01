@@ -1,5 +1,6 @@
 import { repository} from '@loopback/repository';
 import {HttpErrors} from '@loopback/rest';
+
 // import bcrypt from 'bcryptjs'
 // import {setTimeout} from 'timers';
 import validator from 'validator';
@@ -37,10 +38,9 @@ export class NonDbService {
     }
     }
 
-    await Promise.race([verifyEmail(), verifyPassWord()]).then(result =>{
+    await Promise.all([verifyEmail(), verifyPassWord()]).then(result =>{
 
-      if(typeof result === typeof 'string'){
-
+      if(typeof result[0] === typeof "string" || typeof result[1] === typeof "string"){
         throw new HttpErrors.NotAcceptable(`${result}`)
 
       }

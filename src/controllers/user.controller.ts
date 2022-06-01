@@ -83,15 +83,15 @@ export class UserController {
     })
     user: User,
   ): Promise<User> {
-    // const generateID = async () => {
-    //   const count = await this.userRepository.count();
-    //   return count.count + 1;
-    // };
+    const generateID = async () => {
+      const count = await this.userRepository.count();
+      return count.count + 1;
+    };
 
     await this.nonDbService.verifyEmailAndPassWord(user)
     await this.validService.validateDuplicateUser(user)
 
-    // user.id = await generateID();
+    user.id = await generateID();
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(user.password, salt);
 
