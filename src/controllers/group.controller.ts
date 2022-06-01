@@ -1,31 +1,22 @@
+import {repository} from '@loopback/repository';
 import {
-  // Count,
-  // CountSchema,
-  // Filter,
-  // FilterExcludingWhere,
-  repository,
-  // Where,
-} from '@loopback/repository';
-import {
-  post,
-  param,
-  get,
-  getModelSchemaRef,
   // patch,
   // put,
   del,
+  get,
+  getModelSchemaRef,
+  param,
+  post,
   requestBody,
   response,
 } from '@loopback/rest';
-import {Group} from '../models';
-import {GroupRepository} from '../repositories';
-import { User } from '../models'
-import { UserRepository } from '../repositories';
+import {Group, User} from '../models';
+import {GroupRepository, UserRepository} from '../repositories';
 
 export class GroupController {
   constructor(
     @repository(GroupRepository)
-    public groupRepository : GroupRepository,
+    public groupRepository: GroupRepository,
     @repository(UserRepository) protected userRepository: UserRepository,
   ) {}
 
@@ -47,16 +38,16 @@ export class GroupController {
     })
     group: Group,
   ): Promise<Group> {
-    const generateID = async () => {
-      const count = await this.groupRepository.count()
-      return  count.count + 1;
-
-   }
-    group.id = await generateID();
+    group.id = await this.generateID();
     return this.groupRepository.create(group);
   }
 
-  // @get('/groups/count')
+  async generateID(): Promise<number> {
+    const count = await this.groupRepository.count();
+    return count.count + 1;
+  }
+
+  // @get('/groups/count')SSS
   // @response(200, {
   //   description: 'Group model count',
   //   content: {'application/json': {schema: CountSchema}},
@@ -74,14 +65,15 @@ export class GroupController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(Group, {includeRelations: true}),
+          items: getModelSchemaRef(Group, {
+            includeRelations: true,
+          }),
         },
       },
     },
   })
-  async find(
-    // @param.filter(Group) filter?: Filter<Group>,
-  ): Promise<Group[]> {
+  async find(): // @param.filter(Group) filter?: Filter<Group>,
+  Promise<Group[]> {
     return this.groupRepository.find();
   }
 
@@ -94,16 +86,19 @@ export class GroupController {
           type: 'array',
           items: getModelSchemaRef(User, {
             includeRelations: false,
-            exclude: ["password"]
+            exclude: ['password'],
           }),
         },
       },
     },
   })
   async findUser(
-    @param.path.number('id') id: typeof Group.prototype.id
+    @param.path.number('id') id: typeof Group.prototype.id,
   ): Promise<User[]> {
-    return this.userRepository.find({fields: {password: false},where: {groupId: id}});
+    return this.userRepository.find({
+      fields: {password: false},
+      where: {groupId: id},
+    });
   }
   // @patch('/groups')
   // @response(200, {

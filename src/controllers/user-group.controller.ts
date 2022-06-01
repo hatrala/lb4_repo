@@ -1,23 +1,13 @@
-import {
-  repository,
-} from '@loopback/repository';
-import {
-  param,
-  get,
-  getModelSchemaRef,
-  HttpErrors,
-} from '@loopback/rest';
-import {
-  User,
-  Group,
-} from '../models';
+import {repository} from '@loopback/repository';
+import {get, getModelSchemaRef, HttpErrors, param} from '@loopback/rest';
+import {Group, User} from '../models';
 import {UserRepository} from '../repositories';
 
 export class UserGroupController {
   constructor(
     @repository(UserRepository)
     public userRepository: UserRepository,
-  ) { }
+  ) {}
 
   @get('/users/{id}/group', {
     responses: {
@@ -34,14 +24,12 @@ export class UserGroupController {
   async getGroup(
     @param.path.number('id') id: typeof User.prototype.id,
   ): Promise<Group> {
-
-    if(!await this.userRepository.group(id))
-    {
-
-      throw new HttpErrors[404]("This user has not belong to any group")
-
+    const userGroup = await this.userRepository.group(id);
+    
+    if (!userGroup) {
+      throw new HttpErrors[404]('This user has not belong to any group');
     }
 
-    return this.userRepository.group(id);
+    return userGroup;
   }
 }
