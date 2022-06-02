@@ -38,7 +38,8 @@ import {AutheSevice, MyUserService, } from '../services/user.service';
 import {ValidateService} from '../services/validate.service'
 import {NonDbService} from '../services/NonDB.service'
 // import {omit} from 'lodash';
-
+// import { connect } from 'amqplib/callback_api';
+import { Proceducer } from '../services';
 
 export class UserController {
 
@@ -57,6 +58,7 @@ export class UserController {
     @service(AutheSevice) public autheSevice: AutheSevice,
     @service(ValidateService) public validService: ValidateService,
     @service(NonDbService) public nonDbService: NonDbService,
+    @service(Proceducer) public proceducer: Proceducer
   ) {}
 
   @post('/users/singup')
@@ -247,24 +249,7 @@ export class UserController {
   //     return this.userRepository.updateAll(user, where);
   //   }
 
-    @get('/users/{id}')
-    @response(200, {
-      description: 'User model instance',
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(User,{
-          includeRelations: true,
 
-        }),
-        },
-      },
-    })
-    async findById(
-      @param.path.number('id') id: number,
-    ): Promise<Omit<User, 'password'>> {
-      const foundUser = this.userRepository.findById(id);
-      return foundUser
-    }
 
   //   @put('/users/{id}')
   //   @response(204, {
@@ -284,4 +269,64 @@ export class UserController {
   //   async deleteById(@param.path.number('id') id: number): Promise<void> {
   //     await this.userRepository.deleteById(id);
   //   }
+
+
+
+
+  @get('/users/{id}')
+    @response(200, {
+      description: 'User model instance',
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(User,{
+          includeRelations: true,
+
+        }),
+        },
+      },
+    })
+    async findById(
+      @param.path.number('id') id: number,
+    ): Promise<Omit<User, 'password'>> {
+      const foundUser = this.userRepository.findById(id);
+      return foundUser
+    }
+
+  @post('/send')
+  async send(
+    @requestBody({
+      content: {
+      'application/json': {
+        schema: getModelSchemaRef(User, {
+          title: 'requestUser',
+          exclude: ['username', 'id', 'groupId'],
+        }),
+      },
+    },
+  })
+    user: User,
+  ): Promise<void> {
+    await this.proceducer.sendToQueue(user, "userqueue")
+  }
+
+  @get("/receive")
+  @response(200, {
+    description: 'User model instance',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(User,{
+        includeRelations: true,
+
+      }),
+      },
+    },
+  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async receiveUser(): Promise<any> {
+    // console.log(this.proceducer.receiveFromQueue("userqueue"));
+     await this.proceducer.receiveFromQueue("userqueue")
+
+
+  }
+
 }

@@ -7,9 +7,7 @@ import {
   ResponseObject,
 } from '@loopback/rest';
 
-/**
- * OpenAPI response for ping()
- */
+
 const PING_RESPONSE: ResponseObject = {
   description: 'Ping Response',
   content: {
