@@ -1,29 +1,27 @@
-import {Entity, model, property, belongsTo} from '@loopback/repository';
-import {Group} from './group.model';
+import {Entity, model, property} from '@loopback/repository';
 
-@model()
+@model({settings: {strict: false}})
 export class User extends Entity {
   @property({
     type: 'string',
+    id: true,
+    generated: true,
+  })
+  id?: String;
+
+  @property({
+    type: 'string',
     required: true,
+    unique: true,
   })
   username: string;
 
   @property({
     type: 'string',
     required: true,
+    unique: true
   })
   email: string;
-
-  @property({
-    type: 'number',
-    id: true,
-    generated: false,
-    required: false,
-    default: 0,
-    forceid: false
-  })
-  id: number;
 
   @property({
     type: 'string',
@@ -31,8 +29,66 @@ export class User extends Entity {
   })
   password: string;
 
-  @belongsTo(() => Group)
-  groupId: number;
+  @property({
+    type: 'string',
+    required: true,
+  })
+  name: string;
+
+  @property({
+    type: 'number',
+    required: true,
+  })
+  age: number;
+
+  @property({
+    type: 'boolean',
+    required: true,
+  })
+  gender: boolean;
+
+  @property({
+    type: 'string',
+    required: true,
+  })
+  major: string;
+
+  @property({
+    type: 'string',
+    required: true,
+  })
+  school: string;
+
+  @property({
+    type: 'number',
+    required: true,
+  })
+  pocket: number;
+
+  @property({
+    type: 'string',
+    required: true,
+    default: "Student"
+  })
+  type: string;
+
+  @property({
+    type: 'date',
+    default: () => new Date()
+  })
+  created ? : string;
+
+  @property({
+    type: 'date',
+    default: () => new Date()
+  })
+  modified ? : string;
+
+  @property({
+    type: 'string',
+  })
+  lessonGroupId?: string;
+
 
   constructor(data?: Partial<User>) {
     super(data);

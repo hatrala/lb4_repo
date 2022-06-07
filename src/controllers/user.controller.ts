@@ -1,8 +1,8 @@
-import { TokenService} from '@loopback/authentication';
+// import { TokenService} from '@loopback/authentication';
 import {
   // Credentials,
   // MyUserService,
-  TokenServiceBindings,
+  // TokenServiceBindings,
   // User,
   // UserRepository,
   UserServiceBindings,
@@ -15,12 +15,12 @@ import {
   repository,
 } from '@loopback/repository';
 import {
-  del,
-  get,
+  // del,
+  // get,
   getModelSchemaRef,
   // HttpErrors,
-  param,
-  patch,
+  // param,
+  // patch,
   post,
   // put,
   requestBody,
@@ -32,7 +32,7 @@ import {SecurityBindings, UserProfile} from '@loopback/security';
 import bcrypt from 'bcryptjs';
 // import * as jwt from 'jsonwebtoken';
 // import {genSalt, hash} from 'bcryptjs';
-import {User} from '../models';
+import {Student, Teacher, User} from '../models';
 import {UserRepository} from '../repositories';
 import {AutheSevice, MyUserService, } from '../services/user.service';
 import {ValidateService} from '../services/validate.service'
@@ -48,8 +48,8 @@ export class UserController {
   constructor(
     // @repository(UserRepository)
     // public userRepository : UserRepository,
-    @inject(TokenServiceBindings.TOKEN_SERVICE)
-    public jwtService: TokenService,
+    // @inject(TokenServiceBindings.TOKEN_SERVICE)
+    // public jwtService: TokenService,
     @inject(UserServiceBindings.USER_SERVICE)
     public userService: MyUserService,
     @inject(SecurityBindings.USER, {optional: true})
@@ -61,64 +61,76 @@ export class UserController {
     @service(Proceducer) public proceducer: Proceducer
   ) {}
 
-  @post('/users/singup')
+
+
+  @post('/users/create-teacher')
   @response(200, {
-    description: 'User model instance',
-    content: {
-      'application/json': {
-        schema: getModelSchemaRef(User, {
-          exclude: ['id', 'password'],
-        }),
-      },
-    },
+    description: 'desc',
+    content: {'application/json': {schema: getModelSchemaRef(User)}},
   })
-  async create(
+  async createTeacher(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(User, {
-            title: 'NewUser',
-            exclude: ['id', 'groupId'],
+          schema: getModelSchemaRef(Teacher, {
+            title: 'NewTeacher',
+            exclude: ['id', 'created', 'modified', 'type', 'lessonGroupId'],
           }),
         },
       },
     })
-    user: User,
+    user: Omit<User, 'id, type'>,
   ): Promise<User> {
-    const generateID = async () => {
-      const count = await this.userRepository.count();
-      return count.count + 1;
-    };
 
     await this.nonDbService.verifyEmailAndPassWord(user)
     await this.validService.validateDuplicateUser(user)
 
-    user.id = await generateID();
+
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(user.password, salt);
 
-    // user.password = await hash(user.password, await genSalt(10))
-
+    user.type = 'Teacher'
     await this.userRepository.create(user);
+
+
     user.password = '****';
     return user;
+
   }
 
-  @del('/users/{id}')
-  @response(204, {
-    description: 'User DELETE success',
-    content: {
-      'application/json': {
-        schema: {
-          message: String,
+  @post('/users/create-student')
+  @response(200, {
+    description: 'desc 2',
+    content: {'application/json': {schema: getModelSchemaRef(Student)}},
+  })
+  async createStudent(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Student, {
+            title: 'NewStudent',
+            exclude: ['id', 'created', 'modified',"type"],
+          }),
         },
       },
-    },
-  })
-  async deleteById(@param.path.number('id') id: number): Promise<String> {
-    await this.userRepository.deleteById(id);
-    const message = 'delete successful';
-    return message;
+    })
+    user: Omit<Student, 'id, type'>,
+  ): Promise<User> {
+
+    await this.nonDbService.verifyEmailAndPassWord(user)
+    await this.validService.validateDuplicateUser(user)
+
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(user.password, salt);
+
+    user.type = 'Student'
+    await this.userRepository.create(user);
+
+
+    user.password = '****';
+    return user;
+
   }
 
   @post('/users/login', {
@@ -146,7 +158,11 @@ export class UserController {
         'application/json': {
           schema: getModelSchemaRef(User, {
             title: 'requestUser',
-            exclude: ['username', 'id', 'groupId'],
+            exclude: [
+              'username', 'id', 'name',
+              'age', 'gender', 'major',
+              'school', 'pocket', 'type',
+              'modified', 'created' ],
           }),
         },
       },
@@ -162,6 +178,49 @@ export class UserController {
 
     return {token};
   }
+
+
+  // @post('/users/singup')
+  // @response(200, {
+  //   description: 'User model instance',
+  //   content: {
+  //     'application/json': {
+  //       schema: getModelSchemaRef(User, {
+  //         exclude: ['id', 'password'],
+  //       }),
+  //     },
+  //   },
+  // })
+  // async signup(
+  //   @requestBody({
+  //     content: {
+  //       'application/json': {
+  //         schema: getModelSchemaRef(User, {
+  //           title: 'NewUser',
+  //           exclude: ['id', 'pocket', 'modified', 'created'],
+  //         }),
+  //       },
+  //     },
+  //   })
+  //   user: User,
+  // ): Promise<User> {
+
+
+  //   await this.nonDbService.verifyEmailAndPassWord(user)
+  //   await this.validService.validateDuplicateUser(user)
+
+
+  //   const salt = await bcrypt.genSalt(10);
+  //   user.password = await bcrypt.hash(user.password, salt);
+
+  //   // user.password = await hash(user.password, await genSalt(10))
+
+  //   await this.userRepository.create(user);
+  //   user.password = '****';
+  //   return user;
+  // }
+
+
 
   // @authenticate('jwt')
   // @get('/users/getInfo', {
@@ -180,26 +239,26 @@ export class UserController {
   // })
   // async whoAmI(): Promise<void> {}
 
-  @patch('/updateGroupId/{userId}')
-  @response(204, {
-    description: 'User PATCH success',
-  })
-  async updateById(
-    @param.path.number('userId') id: number,
-    @requestBody({
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(User, {
-            partial: true,
-            exclude: ['id', 'password', 'username', 'email'],
-          }),
-        },
-      },
-    })
-    user: User,
-  ): Promise<void> {
-    await this.userRepository.updateById(id, user);
-  }
+  // @patch('/updateGroupId/{userId}')
+  // @response(204, {
+  //   description: 'User PATCH success',
+  // })
+  // async updateById(
+  //   @param.path.number('userId') id: number,
+  //   @requestBody({
+  //     content: {
+  //       'application/json': {
+  //         schema: getModelSchemaRef(User, {
+  //           partial: true,
+  //           exclude: ['id', 'password', 'username'],
+  //         }),
+  //       },
+  //     },
+  //   })
+  //   user: User,
+  // ): Promise<void> {
+  //   await this.userRepository.updateById(id, user);
+  // }
 
   //   @get('/users/count')
   //   @response(200, {
@@ -273,60 +332,62 @@ export class UserController {
 
 
 
-  @get('/users/{id}')
-    @response(200, {
-      description: 'User model instance',
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(User,{
-          includeRelations: true,
+  // @get('/users/{id}')
+  //   @response(200, {
+  //     description: 'User model instance',
+  //     content: {
+  //       'application/json': {
+  //         schema: getModelSchemaRef(User,{
+  //         includeRelations: true,
 
-        }),
-        },
-      },
-    })
-    async findById(
-      @param.path.number('id') id: number,
-    ): Promise<Omit<User, 'password'>> {
-      const foundUser = this.userRepository.findById(id);
-      return foundUser
-    }
+  //       }),
+  //       },
+  //     },
+  //   })
+  //   async findById(
+  //     @param.path.number('id') id: number,
+  //   ): Promise<Omit<User, 'password'>> {
+  //     const foundUser = this.userRepository.findById(id);
+  //     return foundUser
+  //   }
 
-  @post('/send')
-  async send(
-    @requestBody({
-      content: {
-      'application/json': {
-        schema: getModelSchemaRef(User, {
-          title: 'requestUser',
-          exclude: ['username', 'id', 'groupId'],
-        }),
-      },
-    },
-  })
-    user: User,
-  ): Promise<void> {
-    await this.proceducer.sendToQueue(user, "userqueue")
-  }
+  // @post('/send')
+  // async send(
+  //   @requestBody({
+  //     content: {
+  //     'application/json': {
+  //       schema: getModelSchemaRef(User, {
+  //         title: 'requestUser',
+  //         exclude: ['username', 'id'],
+  //       }),
+  //     },
+  //   },
+  // })
+  //   user: User,
+  // ): Promise<void> {
+  //   await this.proceducer.sendToQueue(user, "userqueue")
+  // }
 
-  @get("/receive")
-  @response(200, {
-    description: 'User model instance',
-    content: {
-      'application/json': {
-        schema: getModelSchemaRef(User,{
-        includeRelations: true,
+  // @get("/receive")
+  // @response(200, {
+  //   description: 'User model instance',
+  //   content: {
+  //     'application/json': {
+  //       schema: getModelSchemaRef(User,{
+  //       includeRelations: true,
 
-      }),
-      },
-    },
-  })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async receiveUser(): Promise<any> {
-    // console.log(this.proceducer.receiveFromQueue("userqueue"));
-     await this.proceducer.receiveFromQueue("userqueue")
+  //     }),
+  //     },
+  //   },
+  // })
+  // // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // async receiveUser(): Promise<any> {
+  //   // console.log(this.proceducer.receiveFromQueue("userqueue"));
+  //    await this.proceducer.receiveFromQueue("userqueue")
 
 
-  }
+  // }
+
+
 
 }

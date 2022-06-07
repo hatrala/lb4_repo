@@ -4,11 +4,18 @@ import {HttpErrors} from '@loopback/rest';
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 // import {setTimeout} from 'timers';
-import {User} from '../models';
-import {UserRepository} from '../repositories';
+import {Lesson, User} from '../models';
+import {LessonGroupRepository, LessonRepository, MajorRepository, UserRepository} from '../repositories';
 export class ValidateService {
   constructor(
-    @repository(UserRepository) protected userRepository: UserRepository,
+    @repository(UserRepository)
+    protected userRepository: UserRepository,
+    @repository(LessonRepository)
+    protected lessonRepository: LessonRepository,
+    @repository(MajorRepository)
+    protected majorRepository: MajorRepository,
+    @repository(LessonGroupRepository)
+    protected lessonGroupRepository: LessonGroupRepository
   ) {}
 
   async verifyLoginInformation(requestUser: User): Promise<void> {
@@ -39,9 +46,10 @@ export class ValidateService {
 
     const email = foundUser?.email.toString();
     const username = foundUser?.username.toString();
+    const id = foundUser?.id
 
     const token = jwt.sign(
-      {useremail: email, username: username},
+      {id: id,  useremail: email, username: username},
       'superSecretKey',
       {expiresIn: '1h'},
     );
@@ -79,6 +87,65 @@ export class ValidateService {
           throw new HttpErrors.NotAcceptable("User Exited")
         }
       })
+  }
 
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+ async checkDuplicateMajor (majorname:string): Promise<any> {
+  const isDuplicate =  await this.majorRepository.findOne({
+    where: {
+      majorName: majorname,
+    },
+  })
+
+  if(isDuplicate){
+    return true
+  }
+ }
+
+async checkDuplicateLesson (lesson: Lesson):Promise<void> {
+
+    const isDuplicate =  await this.lessonRepository.findOne({
+      where: {
+         lessonCode: lesson.lessonCode
+          }
+        })
+      console.log(isDuplicate);
+
+    if(isDuplicate){
+      throw new HttpErrors.NotAcceptable("Lesson is exited")
+    }
 }
+
+
+  async checkExitedLessonByCode (lessonCode: string):Promise<void> {
+      const isExited =  await this.lessonRepository.findOne({
+        where: {
+            lessonCode: lessonCode
+            }
+          })
+
+      if(!isExited){
+        throw new HttpErrors.NotAcceptable(`Lesson with lessoncode: ${lessonCode} is not exited`)
+      }
+    // }
+  }
+
+  async checkDuplicateLessonGroup (groupName: string, lessonCode: string):Promise<boolean> {
+
+    const isDuplicate =  await this.lessonGroupRepository.findOne({
+      where: {
+        and: [{groupName: groupName},
+           {lessonCode: lessonCode}]
+          }
+        })
+
+    if(isDuplicate){
+      // throw new HttpErrors.NotAcceptable(`${groupName} is already exited in ${lessonCode}`)
+      return true
+    }
+
+    return false
+}
+
+
 }
