@@ -7,6 +7,7 @@ import {
   requestBody,
   response,
   HttpErrors,
+  patch,
 } from '@loopback/rest';
 import {Lession, StudentScore} from '../models';
 import {LessionRepository, StudentScoreRepository, UserRepository} from '../repositories';
@@ -110,6 +111,48 @@ export class LessionController {
     return this.studentScoreRepo.create(studentScore)
 
   }
+
+
+  @patch('/Eddit Score/{studentID}/{lessionID}')
+  async edditScore(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(StudentScore, {
+            title: 'NewStudentScore',
+            exclude: [
+              'id', 'created', 'createdByID',
+              'modified', 'modifiedByID',
+            ],
+          }),
+        },
+      },
+    })
+    studentScore: Omit<StudentScore, 'id'>,
+  ): Promise<void> {
+
+    const foundStudentScore = await this.studentScoreRepo.findOne({
+      where:{
+        studentID: studentScore.studentID,
+        lessionID: studentScore.lessionID
+      }
+    })
+
+    if(foundStudentScore) {
+
+      throw new HttpErrors.NotAcceptable("Student may not existed or student did not learn this lession")
+
+    }
+
+    const updateScore =
+    {
+      score: studentScore.score
+      }
+
+    await this.studentScoreRepo.updateById(foundStudentScore!.id, updateScore);
+
+    }
+
 
 
 
