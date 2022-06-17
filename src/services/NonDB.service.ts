@@ -13,6 +13,37 @@ export class NonDbService {
     @repository(UserRepository) protected userRepository:UserRepository
   ){}
 
+ async generateEmail(user:User): Promise<string> {
+        if(user.type === 'Student') {
+
+          return `${user.username}@stu.com`
+
+        }else if(user.type === 'Teacher') {
+
+          return `${user.username}@tea.com`
+
+        }else {
+
+          throw new HttpErrors.NotAcceptable("User type is not valid")
+
+        }
+ }
+
+async verifyPassword(user:User):Promise<void> {
+  const isValidPassWord =
+    validator.isStrongPassword(user.password, {
+      minLength: 8,
+      minLowercase: 1,
+      minUppercase: 1,
+      minNumbers: 1,
+      minSymbols: 1,
+    })
+
+    if (!isValidPassWord) {
+      throw new HttpErrors.NotAcceptable("Password is not match requirements")
+    }
+    }
+
   async verifyEmailAndPassWord(requestUser: User): Promise<void> {
 
     const verifyEmail = () =>{

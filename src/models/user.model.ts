@@ -1,13 +1,9 @@
-import {Entity, model, property} from '@loopback/repository';
+import { model, property, belongsTo} from '@loopback/repository';
+import { BasedModel } from './based.model';
+import {ClassRoom} from './class-room.model';
 
-@model({settings: {strict: false}})
-export class User extends Entity {
-  @property({
-    type: 'string',
-    id: true,
-    generated: true,
-  })
-  id?: String;
+@model({setting: {stict: false}})
+export class User extends BasedModel {
 
   @property({
     type: 'string',
@@ -50,45 +46,12 @@ export class User extends Entity {
   @property({
     type: 'string',
     required: true,
-  })
-  major: string;
-
-  @property({
-    type: 'string',
-    required: true,
-  })
-  school: string;
-
-  @property({
-    type: 'number',
-    required: true,
-  })
-  pocket: number;
-
-  @property({
-    type: 'string',
-    required: true,
     default: "Student"
   })
   type: string;
 
-  @property({
-    type: 'date',
-    default: () => new Date()
-  })
-  created ? : string;
-
-  @property({
-    type: 'date',
-    default: () => new Date()
-  })
-  modified ? : string;
-
-  @property({
-    type: 'string',
-  })
-  lessonGroupId?: string;
-
+  @belongsTo(() => ClassRoom)
+  classRoomId: string;
 
   constructor(data?: Partial<User>) {
     super(data);
@@ -100,3 +63,7 @@ export interface UserRelations {
 }
 
 export type UserWithRelations = User & UserRelations;
+
+
+
+// {settings: {strict: false}}
