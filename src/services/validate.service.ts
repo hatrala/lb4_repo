@@ -115,5 +115,105 @@ export class ValidateService {
     }
  }
 
+ async checkExitedUser (id: string, type: string):Promise<void> {
+
+  const isExitedUser = await this.userRepository.findOne({where: {id: id, type: type}})
+
+  if(!isExitedUser) {
+
+   throw new HttpErrors.NotAcceptable(`${type} not exist`)
+
+  }
+}
+
+async verifyUserWhenAddToClass (userid: string, usertype: string): Promise<void> {
+
+  const isExitedUser = await this.userRepository.findOne({
+    where: {
+      id: userid,
+      type: usertype,
+      status: 'Draft'
+    }
+  })
+
+  if(!isExitedUser) {
+
+    throw new HttpErrors.NotAcceptable(`${usertype} not exist or not ready to add to class`)
+
+  }else if(isExitedUser.classRoomId) {
+
+    throw new HttpErrors.NotAcceptable(`This ${usertype} already belong to another class`)
+
+  }
+
+}
+
+async checkExistedClass (classid: string, usertype?: string): Promise<void> {
+
+    if(usertype === "Teacher") {
+
+      const isExitedClass = await this.classRoomRepository.findOne({where: {id: classid, status: 'Draft'}})
+
+      if(!isExitedClass) {
+
+        throw new HttpErrors.NotAcceptable(`There is no class match requirement`)
+
+      }
+
+    }else {
+      const isExitedClass = await this.classRoomRepository.findOne({
+        where:
+        {
+          and: [
+            {id: classid},
+            {or: [
+              {status: 'Draft'},
+              {status: 'Active'}
+            ]}
+          ]
+        }
+      })
+
+      if(!isExitedClass) {
+
+        throw new HttpErrors.NotAcceptable(`There is no class match requirement `)
+
+      }
+    }
+
+}
+
+async checkIfClassHasTeacher(classid: string): Promise<void> {
+  const foundUser = await this.userRepository.find({
+    where: {
+      classRoomId: classid,
+      status: 'Active'
+    }
+  })
+
+  if(foundUser.length > 0) {
+
+    throw new HttpErrors.NotAcceptable("This class is already has a teacher")
+
+  }
+}
+
+async verifyClassWhenAddUserToClass (classid: string, usertype: string): Promise<void> {
+
+  if(usertype === "Student") {
+
+      await this.checkExistedClass(classid, usertype)
+
+  }else {
+
+    await Promise.all([
+      this.checkExistedClass(classid, usertype),
+      this.checkIfClassHasTeacher(classid)
+    ])
+
+  }
+
+}
+
 
 }

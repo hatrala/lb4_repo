@@ -38,10 +38,10 @@ export class User extends BasedModel {
   age: number;
 
   @property({
-    type: 'boolean',
+    type: 'string',
     required: true,
   })
-  gender: boolean;
+  gender: "Male" | "Female" | "Unknown";
 
   @property({
     type: 'string',

@@ -1,3 +1,4 @@
+import {service} from '@loopback/core';
 import {
   repository,
 } from '@loopback/repository';
@@ -8,9 +9,12 @@ import {
   response,
   HttpErrors,
   patch,
+  param,
+  get,
 } from '@loopback/rest';
-import {Lession, StudentScore} from '../models';
+import {Lession, StudentScore, User} from '../models';
 import {LessionRepository, StudentScoreRepository, UserRepository} from '../repositories';
+import {ValidateService} from '../services';
 
 export class LessionController {
   constructor(
@@ -19,7 +23,9 @@ export class LessionController {
     @repository(StudentScoreRepository)
     public studentScoreRepo : StudentScoreRepository,
     @repository(UserRepository)
-    public userRepository : UserRepository
+    public userRepository : UserRepository,
+    @service(ValidateService)
+    public validservice : ValidateService
   ) {}
 
   @post('/Create-lession')
@@ -35,7 +41,7 @@ export class LessionController {
             title: 'NewLession',
             exclude: [
               'id', 'created', 'createdByID',
-              'modified', 'modifiedByID',
+              'modified', 'modifiedByID', 'status'
             ],
           }),
         },
@@ -64,7 +70,7 @@ export class LessionController {
             title: 'NewStudentScore',
             exclude: [
               'id', 'created', 'createdByID',
-              'modified', 'modifiedByID', 'score'
+              'modified', 'modifiedByID', 'score', 'status'
             ],
           }),
         },
@@ -80,20 +86,8 @@ export class LessionController {
       throw new HttpErrors.NotAcceptable("StudentScore already exited")
 
     }
-     const checkExitedStudent = async () => {
 
-       const isExitedStudent = await this.userRepository.findById(studentScore.studentID)
 
-       if(!isExitedStudent) {
-
-        throw new HttpErrors.NotAcceptable("Student not exist")
-
-       }else if(isExitedStudent.type !== "Student") {
-
-        throw new HttpErrors.NotAcceptable("This id is not a StudentID")
-
-       }
-     }
      const checkExitedLession = async () => {
 
       const isExitedLession = await this.lessionRepository.findById(studentScore.lessionID)
@@ -105,12 +99,64 @@ export class LessionController {
       }
     }
 
+    const type = "Student"
 
-    await Promise.all([checkExitedLession(), checkExitedStudent()])
+    await Promise.all([
+
+      checkExitedLession(),
+
+      this.validservice.checkExitedUser(studentScore.studentID, type)
+
+    ])
 
     return this.studentScoreRepo.create(studentScore)
 
   }
+
+  @get('/get-list-of-Student-by-lession/{lessionID}')
+    @response(200, {
+      description: 'List of student by lession',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'array',
+            items: getModelSchemaRef(User, {includeRelations: true}),
+          },
+        },
+      },
+    })
+    async findStudentByLession(
+
+      @param.path.string ('lessionID') id: string,
+
+    ): Promise<unknown> {
+
+      const studentIDlist = await this.studentScoreRepo.find({where: {lessionID: id}});
+
+     const createStudentlist = async (list : unknown[]) => {
+
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+       for(const x of studentIDlist) {
+
+        const student = await this.userRepository.findById(x.studentID);
+
+        list.push(student);
+
+       }
+
+      return list
+
+     }
+
+     let studentList: unknown[] = []
+
+      studentList = await createStudentlist(studentList)
+
+      // console.log(studentList)
+
+      return studentList
+
+    }
 
 
   @patch('/Eddit Score/{studentID}/{lessionID}')
@@ -122,7 +168,7 @@ export class LessionController {
             title: 'NewStudentScore',
             exclude: [
               'id', 'created', 'createdByID',
-              'modified', 'modifiedByID',
+              'modified', 'modifiedByID', 'status'
             ],
           }),
         },
@@ -144,12 +190,7 @@ export class LessionController {
 
     }
 
-    const updateScore =
-    {
-      score: studentScore.score
-      }
-
-    await this.studentScoreRepo.updateById(foundStudentScore!.id, updateScore);
+    await this.studentScoreRepo.updateById(foundStudentScore!.id, {score: studentScore.score});
 
     }
 

@@ -1,28 +1,16 @@
 // import { TokenService} from '@loopback/authentication';
 import {
-  // Credentials,
-  // MyUserService,
-  // TokenServiceBindings,
-  // User,
-  // UserRepository,
   UserServiceBindings,
 } from '@loopback/authentication-jwt';
 import {inject, service} from '@loopback/core';
 import {
-  Count,
-  CountSchema,
-  // Count,
-  // CountSchema,
-  // Filter,
-  repository, Where,
+  repository,
 } from '@loopback/repository';
 import {
   del,
   get,
   getModelSchemaRef,
-  HttpErrors,
   param,
-  patch,
   post,
   requestBody,
   response,
@@ -80,7 +68,7 @@ export class UserController {
             exclude: [
               'id', 'created', 'modified',
                'createdByID', 'modifiedByID',
-              'email', 'classRoomId'
+              'email', 'classRoomId', 'status'
             ],
           }),
         },
@@ -132,7 +120,7 @@ export class UserController {
               'username', 'id', 'name',
               'age', 'gender','modified',
               'created','createdByID', 'modified',
-              'modifiedByID', 'type', 'classRoomId'
+              'modifiedByID', 'type', 'classRoomId', 'status'
             ],
           }),
         },
@@ -164,206 +152,14 @@ export class UserController {
     })
   async find(
   ): Promise<User[]> {
-    return this.userRepository.find({include: ["classRoom"]});
-  }
-
-  @patch('/addTeacherToClass/{teacherID}/{classID}')
-  async addTeachToClass(
-    @param.path.string('teacherID') teacherid: string,
-    @param.path.string ('classID') classID: string,
-  ): Promise<void> {
-    const verifyTeacher = async () => {
-
-      const foundTeacher = await this.userRepository.findById(teacherid)
-
-      if(foundTeacher.type !== "Teacher") {
-
-        throw new HttpErrors.NotAcceptable("user is not a teacher")
-      }
-
-      if(foundTeacher.classRoomId) {
-
-        throw new HttpErrors.NotAcceptable("This Teacher already belong to another class")
-
-      }
-    }
-    const verifyClass = async () => {
-
-    const foundUser = await this.userRepository.find({
+    return this.userRepository.find({
       where: {
-        classRoomId: classID
-      }
-    })
-
-    if(foundUser.length > 0) {
-
-      throw new HttpErrors.NotAcceptable("This class is already has a teacher")
-    }
-
+        or:[
+          {status: 'Active'},
+          {status: 'Draft'}
+        ]},
+        include: ["classRoom"]});
   }
-    // const verifyClass = async () => {
-    //   const foundClass = await this.classRoomRepository.findById(classID)
-
-    //   if(!foundClass){
-    //     throw new HttpErrors.NotAcceptable("class is not exited")
-    //   }
-    // }
-
-    await Promise.all([
-      verifyTeacher(),
-      verifyClass()
-    ])
-
-    const teacher =
-    {
-      classRoomId: classID
-      }
-    await this.userRepository.updateById(teacherid, teacher);
-    }
-
-    @patch('/addStudentToClass/{studentID}/{classID}')
-  async addStudentToClass(
-    @param.path.string('studentID') studentid: string,
-    @param.path.string ('classID') classID: string,
-  ): Promise<void> {
-    const verifyStudent = async () => {
-      const foundUser = await this.userRepository.findById(studentid)
-
-      if(foundUser.type !== "Student") {
-        throw new HttpErrors.NotAcceptable("user is not a Student")
-      }
-      if(foundUser.classRoomId) {
-
-        throw new HttpErrors.NotAcceptable("This Student already belong to another class")
-
-      }
-    }
-
-    await Promise.all([
-      verifyStudent(),
-    ])
-
-    const student =
-    {
-      classRoomId: classID
-      }
-
-    await this.userRepository.updateById(studentid, student);
-
-    }
-
-
-    @get('/count-number-of-student-in-class')
-    @response(200, {
-      description: 'User model count',
-      content: {'application/json': {schema: CountSchema}},
-    })
-    async count(
-      @param.where(User) where?: Where<User>,
-    ): Promise<Count> {
-
-      return this.userRepository.count(where);
-
-    }
-
-    @get('/get-list-of-Student-in-class/{classID}')
-    @response(200, {
-      description: 'List of student in class',
-      content: {
-        'application/json': {
-          schema: {
-            type: 'array',
-            items: getModelSchemaRef(User, {includeRelations: true}),
-          },
-        },
-      },
-    })
-    async findStudent(
-
-      @param.path.string ('classID') classID: string,
-
-    ): Promise<User[]> {
-
-      return this.userRepository.find({where: {classRoomId: classID, type: "Student"}});
-
-    }
-
-    @get('/get-list-of-Student-by-lession/{lessionID}')
-    @response(200, {
-      description: 'List of student by lession',
-      content: {
-        'application/json': {
-          schema: {
-            type: 'array',
-            items: getModelSchemaRef(User, {includeRelations: true}),
-          },
-        },
-      },
-    })
-    async findStudentByLession(
-
-      @param.path.string ('lessionID') id: string,
-
-    ): Promise<unknown> {
-
-      const studentIDlist = await this.studentScoreRepo.find({where: {lessionID: id}});
-
-      // eslint-disable-next-line no-var
-
-
-     const addStudentToList = async (list : unknown[]) => {
-
-      // eslint-disable-next-line @typescript-eslint/no-misused-promises
-       for(const x of studentIDlist) {
-
-        const student = await this.userRepository.findById(x.studentID);
-
-        list.push(student);
-
-       }
-
-      return list
-
-     }
-
-     let studentList: unknown[] = []
-
-      studentList = await addStudentToList(studentList)
-
-      // console.log(studentList)
-
-      return studentList
-
-    }
-
-
-    @get('/get-Teacher-info-of-class/{classID}')
-    @response(200, {
-      description: 'List of student in class',
-      content: {
-        'application/json': {
-          schema: {
-            type: 'array',
-            items: getModelSchemaRef(User, {includeRelations: true}),
-          },
-        },
-      },
-    })
-    async findTeacher(
-
-      @param.path.string ('classID') classID: string,
-
-    ): Promise<User | null> {
-
-      const foundTeacher = await this.userRepository.findOne({where: {classRoomId: classID, type: "Teacher"}});
-
-      if(!foundTeacher) {
-        throw new HttpErrors.NotAcceptable("This class dont have a teacher or class is not exited")
-      }
-
-      return foundTeacher
-
-    }
 
     @del('/DeleteStudent/{studentID}')
     @response(204, {
@@ -374,26 +170,15 @@ export class UserController {
 
       ): Promise<void> {
 
-        const checkExitedStudent = async () => {
+        try {
 
-          const isExitedStudent = await this.userRepository.findById(id)
+          await this.userRepository.updateById(id, {status: 'Deactive'})
 
-          if(!isExitedStudent) {
+        } catch (error) {
 
-           throw new HttpErrors.NotAcceptable("Student not exist")
+          console.log(error);
 
-          }else if(isExitedStudent.type !== "Student") {
-
-           throw new HttpErrors.NotAcceptable("This id is not a StudentID")
-
-          }
         }
-
-        await checkExitedStudent()
-
-        await this.studentScoreRepo.deleteAll({studentID: id})
-
-        await this.userRepository.deleteById(id);
 
     }
 
@@ -406,24 +191,31 @@ export class UserController {
 
       ): Promise<void> {
 
-        const checkExitedTeacher = async () => {
+        try {
 
-          const isExitedTeacher = await this.userRepository.findById(id)
+          const foundTeacher = await this.userRepository.findById(id)
 
-          if(!isExitedTeacher) {
+          if(foundTeacher.classRoomId) {
 
-           throw new HttpErrors.NotAcceptable("Teacher not exist")
+           await Promise.all([
 
-          }else if(isExitedTeacher.type !== "Student") {
+              this.userRepository.updateById(id, {status: 'Deactive'}),
 
-           throw new HttpErrors.NotAcceptable("This id is not a TeacherID")
+              this.classRoomRepository.updateById(foundTeacher.classRoomId, {status: 'Draft'})
+
+            ])
+
+          }else {
+
+            await this.userRepository.updateById(id, {status: 'Deactive'});
 
           }
+
+        } catch (error) {
+
+          console.log(error);
+
         }
-
-        await checkExitedTeacher()
-
-        await this.userRepository.deleteById(id);
 
     }
 
@@ -435,7 +227,7 @@ export class UserController {
 
 
 
-  
+
 
 
 

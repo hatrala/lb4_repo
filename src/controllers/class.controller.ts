@@ -17,7 +17,7 @@ import {
   requestBody,
   response,
 } from '@loopback/rest';
-import {ClassRoom} from '../models';
+import {ClassRoom, User} from '../models';
 import {ClassRoomRepository, UserRepository} from '../repositories';
 import {ValidateService} from '../services';
 
@@ -45,7 +45,8 @@ export class ClassController {
             exclude:
             [
               'id', 'created', 'createdByID',
-              'modified', 'modifiedByID', ],
+              'modified', 'modifiedByID', "status"
+            ],
           }),
         },
       },
@@ -66,9 +67,9 @@ export class ClassController {
     @param.path.string('id') id: string
     ): Promise<void> {
 
-      await this.userRepository.updateAll({classRoomId: "deleted"}, {classRoomId: id})
+      await this.userRepository.updateAll({status: 'Draft'}, {classRoomId: id})
 
-      await this.classRoomRepository.deleteById(id);
+      await this.classRoomRepository.updateById(id, {status: 'Deactive'});
 
   }
 
@@ -90,6 +91,57 @@ export class ClassController {
     return this.classRoomRepository.find();
   }
 
+  @post('/addTeacherToClass/{teacherId}/{classId}')
+  async addTeachToClass(
+    @param.path.string('teacherId') teacherid: string,
+    @param.path.string ('classId') classId: string,
+  ): Promise<void> {
+
+    const type = "Teacher"
+
+    await Promise.all([
+
+      this.validateService.verifyUserWhenAddToClass(teacherid, type),
+
+      this.validateService.verifyClassWhenAddUserToClass(classId, type)
+
+    ])
+
+    await Promise.all([
+
+      this.userRepository.updateById(teacherid, {
+        classRoomId: classId,
+        status: 'Active'
+      }),
+
+      this.classRoomRepository.updateById(classId, {
+        status: "Active"
+      })
+    ])
+
+    }
+
+  @post('/addStudentToClass/{studentId}/{classId}')
+  async addStudentToClass(
+
+  @param.path.string('studentId') studentid: string,
+  @param.path.string ('classId') classId: string,
+
+  ): Promise<void> {
+
+    const type = "Student"
+
+    await Promise.all([
+      this.validateService.verifyUserWhenAddToClass(studentid, type),
+      this.validateService.verifyClassWhenAddUserToClass(classId, type)
+    ])
+
+    await this.userRepository.updateById(studentid, {
+      classRoomId: classId,
+      status: "Active"
+    });
+
+    }
 
   @get('/class-rooms/count')
   @response(200, {
@@ -103,24 +155,87 @@ export class ClassController {
   }
 
 
-  @patch('/Add-teacher-to-class')
-  @response(200, {
-    description: 'ClassRoom PATCH success count',
-    content: {'application/json': {schema: CountSchema}},
-  })
-  async addTeacherTo(
-    @requestBody({
+  @get('/get-Teacher-info-of-class/{classId}')
+    @response(200, {
+      description: 'List of student in class',
       content: {
         'application/json': {
-          schema: getModelSchemaRef(ClassRoom, {partial: true}),
+          schema: {
+            type: 'array',
+            items: getModelSchemaRef(User, {includeRelations: true}),
+          },
         },
       },
     })
-    classRoom: ClassRoom,
-    @param.where(ClassRoom) where?: Where<ClassRoom>,
-  ): Promise<Count> {
-    return this.classRoomRepository.updateAll(classRoom, where);
-  }
+    async findTeacherOfClass(
+
+      @param.path.string ('classId') classId: string,
+
+    ): Promise<User | unknown> {
+
+      try {
+
+        const foundTeacher = await this.userRepository.findOne({
+          where: {
+            classRoomId: classId,
+            type: "Teacher",
+            status: 'Active'
+          }
+        });
+
+        return foundTeacher
+
+      } catch (error) {
+
+        console.log(error);
+
+      }
+
+    }
+
+    @get('/get-list-of-Student-in-class/{classId}')
+    @response(200, {
+      description: 'List of student in class',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'array',
+            items: getModelSchemaRef(User, {includeRelations: true}),
+          },
+        },
+      },
+    })
+    async findStudentInClass(
+
+      @param.path.string ('classId') classId: string,
+
+    ): Promise<User[]> {
+
+      return this.userRepository.find({
+        where: {
+          classRoomId: classId,
+          type: "Student",
+          status: 'Active'
+        }
+      });
+
+    }
+
+    @get('/student/count-in-class/{classId}')
+    @response(200, {
+      description: 'User model count',
+      content: {'application/json': {schema: CountSchema}},
+    })
+    async countStudent(
+      @param.path.string ('classID') classId: string,
+    ): Promise<Count> {
+
+      return this.userRepository.count({
+        classRoomId: classId,
+        status: 'Active'
+      });
+
+    }
 
   @get('/class-rooms/{id}')
   @response(200, {

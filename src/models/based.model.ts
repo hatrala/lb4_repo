@@ -33,6 +33,12 @@ export class BasedModel extends Entity {
   })
   modifiedByID?: string;
 
+  @property({
+    type: 'string',
+    default: "Draft"
+  })
+  status: "Draft" | "Active" | "Deactive";
+
 
   constructor(data?: Partial<BasedModel>) {
     super(data);
