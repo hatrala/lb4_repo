@@ -109,6 +109,7 @@ export class LessionController {
 
     ])
 
+    studentScore.status = "Active"
     return this.studentScoreRepo.create(studentScore)
 
   }
@@ -193,9 +194,6 @@ export class LessionController {
     await this.studentScoreRepo.updateById(foundStudentScore!.id, {score: studentScore.score});
 
     }
-
-
-
 
 
 }

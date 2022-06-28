@@ -39,7 +39,7 @@ export class UserController {
     @repository(ClassRoomRepository)
     protected classRoomRepository: ClassRoomRepository,
     @repository(StudentScoreRepository)
-    protected studentScoreRepo: StudentScoreRepository,
+    protected studentLessionRepo: StudentScoreRepository,
 
     @service(AutheSevice)
     public autheSevice: AutheSevice,
@@ -52,7 +52,7 @@ export class UserController {
   ) {}
 
 
-  @post('/Create/user')
+  @post('/User/Create')
   @response(200, {
     description: 'desc',
     content: {'application/json': {
@@ -93,7 +93,7 @@ export class UserController {
   }
 
 
-  @post('/users/login', {
+  @post('/User/login', {
     responses: {
       '200': {
         description: 'Token',
@@ -140,7 +140,7 @@ export class UserController {
     return {token};
   }
 
-    @get('/get-all-user')
+    @get('/User/GetAll')
     @response(200, {
       description: 'Array of User model instances',
       content: {
@@ -163,7 +163,7 @@ export class UserController {
         include: ["classRoom"]});
   }
 
-    @del('/DeleteStudent/{studentID}')
+    @del('/User/DeleteStudent/{studentID}')
     @response(204, {
       description: 'Student DELETE success',
     })
@@ -176,6 +176,8 @@ export class UserController {
 
           await this.userRepository.updateById(id, {status: 'Deactive'})
 
+          await this.studentLessionRepo.updateAll({status: "Deactive"}, {studentID: id})
+
         } catch (error) {
 
           console.log(error);
@@ -184,7 +186,7 @@ export class UserController {
 
     }
 
-    @del('/DeleteTeacher/{teacherID}')
+    @del('/User/DeleteTeacher/{teacherID}')
     @response(204, {
       description: 'Teacher DELETE success',
     })
@@ -221,7 +223,7 @@ export class UserController {
 
     }
 
-    @del('/DeleteManyTeacher')
+    @del('User/DeleteManyTeacher')
     @response(204, {
       description: 'Teacher DELETE success',
     })
@@ -248,6 +250,38 @@ export class UserController {
       ): Promise<void> {
 
         const type = "Teacher"
+
+        await this.validService.deActiveUser(userarray, type)
+
+    }
+
+    @del('User/DeleteManyStudent')
+    @response(204, {
+      description: 'Student DELETE success',
+    })
+    async deleteManyStudentById(
+      @requestBody({
+        content: {
+          'application/json': {
+            schema: {
+              items: getModelSchemaRef(User, {
+                exclude: [
+                  "age", 'classRoomId', 'created',
+                  'createdByID', 'email', 'gender',
+                  'modified', 'modifiedByID', 'name',
+                  'password', 'status', 'type', 'username'
+                ]
+              }),
+              type: "array"
+            }
+          },
+        },
+      })
+      userarray: User[]
+
+      ): Promise<void> {
+
+        const type = "Student"
 
         await this.validService.deActiveUser(userarray, type)
 

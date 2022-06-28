@@ -5,13 +5,15 @@ import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 // import {setTimeout} from 'timers';
 import {BasedModel, ClassRoom, User} from '../models';
-import {ClassRoomRepository, UserRepository} from '../repositories';
+import {ClassRoomRepository, StudentScoreRepository, UserRepository} from '../repositories';
 export class ValidateService {
   constructor(
     @repository(UserRepository)
     protected userRepository: UserRepository,
     @repository(ClassRoomRepository)
-    protected classRoomRepository: ClassRoomRepository
+    protected classRoomRepository: ClassRoomRepository,
+    @repository(StudentScoreRepository)
+    protected studentLessionRepo: StudentScoreRepository
   ) {}
 
   async verifyLoginInformation(requestUser: User): Promise<void> {
@@ -243,7 +245,7 @@ async createIdArrayFormObjectArray (objectArray: BasedModel[]) {
 
 }
 
-async modifiedUserRelationWhenDeactive(userArray: User[]) {
+async modifiedUserRelationWhenDeactive(userArray: User[], type: string) {
 
 // Function nay em chua hoan thien hien chi su dung cho viec deactive teacher
 
@@ -257,7 +259,34 @@ async modifiedUserRelationWhenDeactive(userArray: User[]) {
   //   })
   // )
 
-  const classIdArray = await Promise.all(
+    if(type === "Teacher") {
+      const classIdArray = await Promise.all(
+      userArray.filter(async (user) => {
+
+        if(user.classRoomId && user.status === "Active") {
+
+          return true
+
+        }
+        return false
+
+      }).map( async (user) => {
+
+        return {
+
+          id: user.classRoomId
+
+        }
+
+      })
+    )
+
+    await this.classRoomRepository.updateAll({status: "Draft"}, {or: classIdArray})
+  }
+
+  if(type === "Student") {
+
+    const studentLessionFilterArray = await Promise.all(
     userArray.filter(async (user) => {
 
       if(user.classRoomId && user.status === "Active") {
@@ -271,14 +300,17 @@ async modifiedUserRelationWhenDeactive(userArray: User[]) {
 
       return {
 
-        id: user.classRoomId
+        studentID: user.id
 
       }
 
     })
   )
 
-  await this.classRoomRepository.updateAll({status: "Draft"}, {or: classIdArray})
+  await this.studentLessionRepo.updateAll({status: "Draft"}, {or: studentLessionFilterArray})
+
+}
+
 
 }
 
@@ -295,9 +327,25 @@ async deActiveUser (userArray: User[], type: string) {
 
           this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
 
-          this.modifiedUserRelationWhenDeactive(fullUserArray)
+          this.modifiedUserRelationWhenDeactive(fullUserArray, type)
 
       ])
+
+  }
+
+  if(type === "Student") {
+
+    const userIdArray = await this.createIdArrayFormObjectArray(userArray)
+
+    const fullUserArray = await this.userRepository.find({where: {or: userIdArray}})
+
+    await Promise.all([
+
+      this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
+
+      this.modifiedUserRelationWhenDeactive(fullUserArray, type)
+
+  ])
 
   }
 
