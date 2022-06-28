@@ -1,6 +1,6 @@
 // import { TokenService} from '@loopback/authentication';
 import {
-  UserServiceBindings,
+  TokenServiceBindings,
 } from '@loopback/authentication-jwt';
 import {inject, service} from '@loopback/core';
 import {
@@ -12,27 +12,35 @@ import {
   getModelSchemaRef,
   param,
   post,
+  Request,
   requestBody,
   response,
+  RestBindings,
 } from '@loopback/rest';
 import {SecurityBindings, UserProfile} from '@loopback/security';
 import bcrypt from 'bcryptjs';
 import { User} from '../models';
 import {ClassRoomRepository, StudentScoreRepository, UserRepository} from '../repositories';
-import {AutheSevice, MyUserService, } from '../services/user.service';
 import {ValidateService} from '../services/validate.service'
 import {NonDbService} from '../services/NonDB.service'
 import { Proceducer } from '../services';
+import {authenticate} from '@loopback/authentication';
+import {promisify} from 'util';
+import {UserService} from '../services/user.service';
 
+const jwt = require('jsonwebtoken');
+const verifyAsync = promisify(jwt.verify);
 
+@authenticate('jwt')
 export class UserController {
 
 
   constructor(
-    @inject(UserServiceBindings.USER_SERVICE)
-    public userService: MyUserService,
+    @inject(TokenServiceBindings.TOKEN_SECRET)
+    private jwtSecret: string,
     @inject(SecurityBindings.USER, {optional: true})
     public user: UserProfile,
+    @inject(RestBindings.Http.REQUEST) private req: Request,
 
     @repository(UserRepository)
     protected userRepository: UserRepository,
@@ -41,8 +49,8 @@ export class UserController {
     @repository(StudentScoreRepository)
     protected studentLessionRepo: StudentScoreRepository,
 
-    @service(AutheSevice)
-    public autheSevice: AutheSevice,
+    @service(UserService)
+    public userService: UserService,
     @service(ValidateService)
     public validService: ValidateService,
     @service(NonDbService)
@@ -92,7 +100,7 @@ export class UserController {
 
   }
 
-
+  @authenticate.skip()
   @post('/User/login', {
     responses: {
       '200': {
@@ -251,7 +259,7 @@ export class UserController {
 
         const type = "Teacher"
 
-        await this.validService.deActiveUser(userarray, type)
+        await this.userService.deActiveUser(userarray, type)
 
     }
 
@@ -273,30 +281,33 @@ export class UserController {
                 ]
               }),
               type: "array"
-            }
+            },
           },
         },
       })
       userarray: User[]
 
       ): Promise<void> {
-
         const type = "Student"
 
-        await this.validService.deActiveUser(userarray, type)
+        await this.userService.deActiveUser(userarray, type)
 
     }
+
+    @get('/something')
+  something(): void {
+    // Use your header.
+    // e.g. Log to console
+    console.log(this.req.headers.authorization);
+    const token  = this.req.headers.authorization!.split(" ")[1]
+    console.log(token);
+    const decode = verifyAsync(token, this.jwtSecret)
+    console.log(decode);
+
 
   }
 
 
-
-
-
-
-
-
-
-
+  }
 
 

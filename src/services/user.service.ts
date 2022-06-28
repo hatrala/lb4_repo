@@ -1,90 +1,109 @@
-// import { UserService } from '@loopback/authentication';
-//   import { Principal } from '@loopback/security';
 import {repository} from '@loopback/repository';
-// import {HttpErrors} from '@loopback/rest';
-// import { User } from '../models';
-import { UserRepository } from '../repositories';
-// import bcrypt from 'bcryptjs'
-// import * as jwt from 'jsonwebtoken';
-/**
- * A pre-defined type for user credentials. It assumes a user logs in
- * using the email and password. You can modify it if your app has different credential fields
- */
-export declare type Credentials = {
-    email: string;
-    password: string;
-};
-// export declare const securityId: unique symbol;
-// export interface Principal {
-//   /**
-//    * Name/id
-//    */
-//   [securityId]: string;
-// }
-
-// import {User, UserRepository} from '@loopback/authentication-jwt';
-// import {repository} from '@loopback/repository';
-
-// export interface UserProfile extends Principal {
-//   email?: string;
-//   username?: string;
-// }
+import {BasedModel, User} from '../models';
+import {ClassRoomRepository, StudentScoreRepository, UserRepository} from '../repositories';
 
 
+export class UserService {
 
-export declare class MyUserService {
-      //   userRepository: UserRepository;
-      // constructor(userRepository: UserRepository);
-      // verifyCredentials(credentials: Credentials): Promise<User>;
-      // convertToUserProfile(user: User): UserProfile;
-      // findUserById(id: number): Promise<User & UserWithRelations>;
-}
-
-
-
-export class AutheSevice{
   constructor(
-    @repository(UserRepository) protected userRepository: UserRepository
-  ){
+    @repository(UserRepository)
+    protected userRepository: UserRepository,
+    @repository(ClassRoomRepository)
+    protected classRoomRepository: ClassRoomRepository,
+    @repository(StudentScoreRepository)
+    protected studentLessionRepo: StudentScoreRepository
+  ) {}
+
+  async createIdArrayFormObjectArray (objectArray: BasedModel[]) {
+
+    const idArray = await Promise.all(
+      objectArray.map( async (object) => {
+
+        return {id: object.id}
+
+      })
+    )
+
+    return idArray
 
   }
-    // async checkUserName(requestUser:User):Promise <void> {
 
-    //     if(!await this.userRepository.findOne({where: {username: requestUser.username}}))
-    //     throw new HttpErrors[404]("Username not exited")
+  async modifiedUserRelationWhenDeactive(userArray: User[], type: string) {
 
-    // }
+      if(type === "Teacher") {
+        const classIdArray = await Promise.all(
+        userArray.filter(async (user) => {
 
-    // async checkPass(requestUser:User):Promise <void> {
+          if(user.classRoomId && user.status === "Active") {
 
-    //       const foundUser = await this.userRepository.findOne({where:{username: requestUser.username}});
+            return true
 
-    //       const pass =  foundUser?.password.toString();
+          }
+          return false
 
-    //       if(!await bcrypt.compare(requestUser.password, pass!))
-    //       {
-    //         throw new HttpErrors.NotAcceptable("password is wrong")
-    //       }
+        }).map( async (user) => {
 
-    // }
+          return {
 
-    // async generateToken(requestUser:User):Promise <String> {
+            id: user.classRoomId
 
-    //   const foundUser = await this.userRepository.findOne({
-    //     where: {username: requestUser.username},
-    //   });
+          }
 
-    //   const email = foundUser?.email.toString();
-    //   const username = foundUser?.username.toString();
+        })
+      )
 
-    //   const token = jwt.sign(
-    //     {useremail: email, username: username},
-    //     'superSecretKey',
-    //     {expiresIn: '1h'},
-    //   );
-    //   return token;
+      await this.classRoomRepository.updateAll({status: "Draft"}, {or: classIdArray})
+    }
 
-    // }
+      if(type === "Student") {
+
+        const studentLessionFilterArray = await Promise.all(
+        userArray.filter(async (user) => {
+
+          if(user.classRoomId && user.status === "Active") {
+
+            return true
+
+          }
+          return false
+
+        }).map( async (user) => {
+
+          return {
+
+            studentID: user.id
+
+          }
+
+        })
+      )
+
+      await this.studentLessionRepo.updateAll({status: "Draft"}, {or: studentLessionFilterArray})
+
+    }
+
+  }
+
+  async deActiveUser (userArray: User[], type: string) {
+
+    if(type) {
+
+      const userIdArray = await this.createIdArrayFormObjectArray(userArray)
+
+      const fullUserArray = await this.userRepository.find({where: {or: userIdArray}})
+
+      // await this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray})
+        await Promise.all([
+
+            this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
+
+            this.modifiedUserRelationWhenDeactive(fullUserArray, type)
+
+        ])
+
+    }
+
+  }
 
 
 }

@@ -1,13 +1,17 @@
+import {TokenServiceBindings} from '@loopback/authentication-jwt';
+import {inject} from '@loopback/core';
 import { repository} from '@loopback/repository';
 import {HttpErrors} from '@loopback/rest';
 // import bcrypt from 'bcryptjs'
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 // import {setTimeout} from 'timers';
-import {BasedModel, ClassRoom, User} from '../models';
+import {ClassRoom, User} from '../models';
 import {ClassRoomRepository, StudentScoreRepository, UserRepository} from '../repositories';
 export class ValidateService {
   constructor(
+    @inject(TokenServiceBindings.TOKEN_SECRET)
+    private jwtSecret: string,
     @repository(UserRepository)
     protected userRepository: UserRepository,
     @repository(ClassRoomRepository)
@@ -39,20 +43,25 @@ export class ValidateService {
 
   async generateToken(requestUser: User): Promise<String> {
     const foundUser = await this.userRepository.findOne({
-      where: {username: requestUser.username},
+      where: {email: requestUser.email},
     });
 
     const email = foundUser?.email.toString();
     const username = foundUser?.username.toString();
     const id = foundUser?.id
     const usertype = foundUser?.type
+    const classid = foundUser?.classRoomId
 
     const token = jwt.sign(
       {
-        id: id,  useremail: email,
-        username: username, type: usertype
+        id: id,
+        useremail: email,
+        username: username,
+        classid: classid,
+        type: usertype
       },
-      'superSecretKey',
+      // 'superSecretKey',
+      this.jwtSecret,
       {expiresIn: '1h'},
     );
     return token;
@@ -230,126 +239,5 @@ async checkUserType (user: User, usertype: string): Promise<boolean> {
   return true
 
 }
-
-async createIdArrayFormObjectArray (objectArray: BasedModel[]) {
-
-  const idArray = await Promise.all(
-    objectArray.map( async (object) => {
-
-      return {id: object.id}
-
-    })
-  )
-
-  return idArray
-
-}
-
-async modifiedUserRelationWhenDeactive(userArray: User[], type: string) {
-
-// Function nay em chua hoan thien hien chi su dung cho viec deactive teacher
-
-  // const fullUserArray = await Promise.all(
-  //   userIdArray.map( async (emlements) => {
-
-  //     const fulluser = await this.userRepository.findById(emlements.id)
-
-  //     return fulluser
-
-  //   })
-  // )
-
-    if(type === "Teacher") {
-      const classIdArray = await Promise.all(
-      userArray.filter(async (user) => {
-
-        if(user.classRoomId && user.status === "Active") {
-
-          return true
-
-        }
-        return false
-
-      }).map( async (user) => {
-
-        return {
-
-          id: user.classRoomId
-
-        }
-
-      })
-    )
-
-    await this.classRoomRepository.updateAll({status: "Draft"}, {or: classIdArray})
-  }
-
-  if(type === "Student") {
-
-    const studentLessionFilterArray = await Promise.all(
-    userArray.filter(async (user) => {
-
-      if(user.classRoomId && user.status === "Active") {
-
-        return true
-
-      }
-      return false
-
-    }).map( async (user) => {
-
-      return {
-
-        studentID: user.id
-
-      }
-
-    })
-  )
-
-  await this.studentLessionRepo.updateAll({status: "Draft"}, {or: studentLessionFilterArray})
-
-}
-
-
-}
-
-async deActiveUser (userArray: User[], type: string) {
-
-  if(type) {
-
-    const userIdArray = await this.createIdArrayFormObjectArray(userArray)
-
-    const fullUserArray = await this.userRepository.find({where: {or: userIdArray}})
-
-    // await this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray})
-      await Promise.all([
-
-          this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
-
-          this.modifiedUserRelationWhenDeactive(fullUserArray, type)
-
-      ])
-
-  }
-
-  // if(type === "Student") {
-
-  //   const userIdArray = await this.createIdArrayFormObjectArray(userArray)
-
-  //   const fullUserArray = await this.userRepository.find({where: {or: userIdArray}})
-
-  //   await Promise.all([
-
-  //     this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
-
-  //     this.modifiedUserRelationWhenDeactive(fullUserArray, type)
-
-  // ])
-
-  // }
-
-}
-
 
 }
