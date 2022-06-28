@@ -16,6 +16,7 @@ import {
   del,
   requestBody,
   response,
+  HttpErrors,
 } from '@loopback/rest';
 import {ClassRoom, User} from '../models';
 import {ClassRoomRepository, UserRepository} from '../repositories';
@@ -173,7 +174,7 @@ export class ClassController {
 
     ): Promise<User | unknown> {
 
-      try {
+
 
         const foundTeacher = await this.userRepository.findOne({
           where: {
@@ -183,13 +184,13 @@ export class ClassController {
           }
         });
 
+        if(!foundTeacher) {
+          throw new HttpErrors.NotAcceptable("This class dont have a active teacher or class has been deactive")
+        }
+
         return foundTeacher
 
-      } catch (error) {
 
-        console.log(error);
-
-      }
 
     }
 

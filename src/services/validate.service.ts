@@ -4,7 +4,7 @@ import {HttpErrors} from '@loopback/rest';
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 // import {setTimeout} from 'timers';
-import {ClassRoom, User} from '../models';
+import {BasedModel, ClassRoom, User} from '../models';
 import {ClassRoomRepository, UserRepository} from '../repositories';
 export class ValidateService {
   constructor(
@@ -135,16 +135,18 @@ async verifyUserWhenAddToClass (userid: string, usertype: string): Promise<void>
       status: 'Draft'
     }
   })
+  console.log(isExitedUser);
 
   if(!isExitedUser) {
 
     throw new HttpErrors.NotAcceptable(`${usertype} not exist or not ready to add to class`)
 
-  }else if(isExitedUser.classRoomId) {
-
-    throw new HttpErrors.NotAcceptable(`This ${usertype} already belong to another class`)
-
   }
+  // else if(isExitedUser.classRoomId) {
+
+  //   throw new HttpErrors.NotAcceptable(`This ${usertype} already belong to another class`)
+
+  // }
 
 }
 
@@ -186,8 +188,8 @@ async checkExistedClass (classid: string, usertype?: string): Promise<void> {
 async checkIfClassHasTeacher(classid: string): Promise<void> {
   const foundUser = await this.userRepository.find({
     where: {
-      classRoomId: classid,
-      status: 'Active'
+      and: [{classRoomId: classid},
+      {status: 'Active'}]
     }
   })
 
@@ -210,6 +212,92 @@ async verifyClassWhenAddUserToClass (classid: string, usertype: string): Promise
       this.checkExistedClass(classid, usertype),
       this.checkIfClassHasTeacher(classid)
     ])
+
+  }
+
+}
+
+async checkUserType (user: User, usertype: string): Promise<boolean> {
+
+  if(user.type !== usertype) {
+
+    return false
+
+  }
+
+  return true
+
+}
+
+async createIdArrayFormObjectArray (objectArray: BasedModel[]) {
+
+  const idArray = await Promise.all(
+    objectArray.map( async (object) => {
+
+      return {id: object.id}
+
+    })
+  )
+
+  return idArray
+
+}
+
+async modifiedUserRelationWhenDeactive(userArray: User[]) {
+
+// Function nay em chua hoan thien hien chi su dung cho viec deactive teacher
+
+  // const fullUserArray = await Promise.all(
+  //   userIdArray.map( async (emlements) => {
+
+  //     const fulluser = await this.userRepository.findById(emlements.id)
+
+  //     return fulluser
+
+  //   })
+  // )
+
+  const classIdArray = await Promise.all(
+    userArray.filter(async (user) => {
+
+      if(user.classRoomId && user.status === "Active") {
+
+        return true
+
+      }
+      return false
+
+    }).map( async (user) => {
+
+      return {
+
+        id: user.classRoomId
+
+      }
+
+    })
+  )
+
+  await this.classRoomRepository.updateAll({status: "Draft"}, {or: classIdArray})
+
+}
+
+async deActiveUser (userArray: User[], type: string) {
+
+  if(type === "Teacher") {
+
+    const userIdArray = await this.createIdArrayFormObjectArray(userArray)
+
+    const fullUserArray = await this.userRepository.find({where: {or: userIdArray}})
+
+    // await this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray})
+      await Promise.all([
+
+          this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
+
+          this.modifiedUserRelationWhenDeactive(fullUserArray)
+
+      ])
 
   }
 

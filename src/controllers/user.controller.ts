@@ -24,7 +24,9 @@ import {ValidateService} from '../services/validate.service'
 import {NonDbService} from '../services/NonDB.service'
 import { Proceducer } from '../services';
 
+
 export class UserController {
+
 
   constructor(
     @inject(UserServiceBindings.USER_SERVICE)
@@ -216,6 +218,38 @@ export class UserController {
           console.log(error);
 
         }
+
+    }
+
+    @del('/DeleteManyTeacher')
+    @response(204, {
+      description: 'Teacher DELETE success',
+    })
+    async deleteManyTeacherById(
+      @requestBody({
+        content: {
+          'application/json': {
+            schema: {
+              items: getModelSchemaRef(User, {
+                exclude: [
+                  "age", 'classRoomId', 'created',
+                  'createdByID', 'email', 'gender',
+                  'modified', 'modifiedByID', 'name',
+                  'password', 'status', 'type', 'username'
+                ]
+              }),
+              type: "array"
+            }
+          },
+        },
+      })
+      userarray: User[]
+
+      ): Promise<void> {
+
+        const type = "Teacher"
+
+        await this.validService.deActiveUser(userarray, type)
 
     }
 
