@@ -316,7 +316,7 @@ async modifiedUserRelationWhenDeactive(userArray: User[], type: string) {
 
 async deActiveUser (userArray: User[], type: string) {
 
-  if(type === "Teacher") {
+  if(type) {
 
     const userIdArray = await this.createIdArrayFormObjectArray(userArray)
 
@@ -333,21 +333,21 @@ async deActiveUser (userArray: User[], type: string) {
 
   }
 
-  if(type === "Student") {
+  // if(type === "Student") {
 
-    const userIdArray = await this.createIdArrayFormObjectArray(userArray)
+  //   const userIdArray = await this.createIdArrayFormObjectArray(userArray)
 
-    const fullUserArray = await this.userRepository.find({where: {or: userIdArray}})
+  //   const fullUserArray = await this.userRepository.find({where: {or: userIdArray}})
 
-    await Promise.all([
+  //   await Promise.all([
 
-      this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
+  //     this.userRepository.updateAll({status: "Deactive"}, {or: userIdArray}),
 
-      this.modifiedUserRelationWhenDeactive(fullUserArray, type)
+  //     this.modifiedUserRelationWhenDeactive(fullUserArray, type)
 
-  ])
+  // ])
 
-  }
+  // }
 
 }
 
