@@ -1,4 +1,4 @@
-import {service} from '@loopback/core';
+import {Constructor, service} from '@loopback/core';
 import {
   repository,
 } from '@loopback/repository';
@@ -12,21 +12,33 @@ import {
   param,
   get,
 } from '@loopback/rest';
+import {activedStatus} from '../config';
+import {ControllerMixin, ControllerMixinOptions} from '../mixins/controller-mixin';
 import {Lession, StudentScore, User} from '../models';
 import {LessionRepository, StudentScoreRepository, UserRepository} from '../repositories';
 import {ValidateService} from '../services';
 
-export class LessionController {
+const options: ControllerMixinOptions = {
+  basePath: 'lession',
+  modelClass: Lession,
+};
+
+export class LessionController extends ControllerMixin<
+  Lession,
+  Constructor<Object>
+>(Object, options) {
   constructor(
     @repository(LessionRepository)
-    public lessionRepository : LessionRepository,
+    public mainRepo : LessionRepository,
     @repository(StudentScoreRepository)
     public studentScoreRepo : StudentScoreRepository,
     @repository(UserRepository)
     public userRepository : UserRepository,
     @service(ValidateService)
     public validservice : ValidateService
-  ) {}
+  ) {
+    super();
+  }
 
   @post('/Create-lession')
   @response(200, {
@@ -49,15 +61,15 @@ export class LessionController {
     })
     lession: Omit<Lession, 'id'>,
   ): Promise<Lession> {
-    const isExited = await this.lessionRepository.findOne({where: {lessionName: lession.lessionName}})
+    const isExited = await this.mainRepo.findOne({where: {lessionName: lession.lessionName}})
     if(isExited) {
       throw new HttpErrors.NotAcceptable("This lession name already exited")
     }
-    return this.lessionRepository.create(lession);
+    return this.mainRepo.create(lession);
 
   }
 
-  @post('/Student-scorce')
+  @post('/LessionController/Student-scorce')
   @response(200, {
     description: 'Lession model instance',
     content: {'application/json': {schema: getModelSchemaRef(StudentScore)}},
@@ -90,7 +102,7 @@ export class LessionController {
 
      const checkExitedLession = async () => {
 
-      const isExitedLession = await this.lessionRepository.findById(studentScore.lessionID)
+      const isExitedLession = await this.mainRepo.findById(studentScore.lessionID)
 
       if(!isExitedLession) {
 
@@ -109,12 +121,12 @@ export class LessionController {
 
     ])
 
-    studentScore.status = "Active"
+    studentScore.status = activedStatus
     return this.studentScoreRepo.create(studentScore)
 
   }
 
-  @get('/get-list-of-Student-by-lession/{lessionID}')
+  @get('/LessionController/get-list-of-Student-by-lession/{lessionID}')
     @response(200, {
       description: 'List of student by lession',
       content: {
@@ -132,35 +144,30 @@ export class LessionController {
 
     ): Promise<unknown> {
 
-      const studentIDlist = await this.studentScoreRepo.find({where: {lessionID: id}});
+      const studentLessionList = await this.studentScoreRepo.find({where: {lessionID: id}});
 
-     const createStudentlist = async (list : unknown[]) => {
+      const studentIDlist = await Promise.all(
 
-      // eslint-disable-next-line @typescript-eslint/no-misused-promises
-       for(const x of studentIDlist) {
+        studentLessionList.map(async (studentLession) => {
 
-        const student = await this.userRepository.findById(x.studentID);
+          return {id: studentLession.studentID}
 
-        list.push(student);
+        })
 
-       }
+      )
 
-      return list
-
-     }
-
-     let studentList: unknown[] = []
-
-      studentList = await createStudentlist(studentList)
-
-      // console.log(studentList)
+      const studentList = await this.userRepository.find({
+        where: {
+          or:studentIDlist
+        }
+      })
 
       return studentList
 
     }
 
 
-  @patch('/Eddit Score/{studentID}/{lessionID}')
+  @patch('/LessionController/Eddit Score')
   async edditScore(
     @requestBody({
       content: {

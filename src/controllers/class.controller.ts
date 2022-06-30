@@ -1,4 +1,4 @@
-import {service} from '@loopback/core';
+import {Constructor, service} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -18,19 +18,35 @@ import {
   response,
   HttpErrors,
 } from '@loopback/rest';
-import {ClassRoom, User} from '../models';
+import {activedStatus, deletedStatus, draftStatus, teacherType} from '../config';
+import {ControllerMixin, ControllerMixinOptions} from '../mixins/controller-mixin';
+import {ClassRoom, ClassRoomRelations, User} from '../models';
 import {ClassRoomRepository, UserRepository} from '../repositories';
-import {ValidateService} from '../services';
+import {NonDbService, ValidateService} from '../services';
 
-export class ClassController {
+const options: ControllerMixinOptions = {
+  basePath: 'classRoom',
+  modelClass: ClassRoom,
+};
+
+
+export class ClassController extends ControllerMixin<
+  ClassRoom,
+  Constructor<Object>
+>(Object, options) {
   constructor(
     @repository(ClassRoomRepository)
-    public classRoomRepository : ClassRoomRepository,
+    public mainRepo : ClassRoomRepository,
     @repository(UserRepository)
     public userRepository : UserRepository,
+
     @service(ValidateService)
-    public validateService: ValidateService
-  ) {}
+    public validateService: ValidateService,
+    @service(NonDbService)
+    public nonDbService: NonDbService
+  ) {
+    super();
+  }
 
   @post('/create-classroom')
   @response(200, {
@@ -54,13 +70,13 @@ export class ClassController {
     })
     classRoom: Omit<ClassRoom, 'id'>,
   ): Promise<ClassRoom> {
-    await this.validateService.checkDuplicateClass(classRoom)
 
-    return this.classRoomRepository.create(classRoom);
+    await this.validateService.checkDuplicateClass(classRoom)
+    return this.mainRepo.create(classRoom);
 
   }
 
-  @del('/class-rooms/{id}')
+  @del('/class-rooms/Delete/{id}')
   @response(204, {
     description: 'ClassRoom DELETE success',
   })
@@ -68,9 +84,9 @@ export class ClassController {
     @param.path.string('id') id: string
     ): Promise<void> {
 
-      await this.userRepository.updateAll({status: 'Draft'}, {classRoomId: id})
+      await this.userRepository.updateAll({status: draftStatus}, {classRoomId: id})
 
-      await this.classRoomRepository.updateById(id, {status: 'Deactive'});
+      await this.mainRepo.updateById(id, {status: deletedStatus});
 
   }
 
@@ -89,8 +105,35 @@ export class ClassController {
   async getAllClassRoom(
     // @param.filter(ClassRoom) filter?: Filter<ClassRoom>,
   ): Promise<ClassRoom[]> {
-    return this.classRoomRepository.find();
+    return this.mainRepo.find();
   }
+
+  @get('/class-rooms/get-class-room-has-more-than{studentNum}')
+  @response(200, {
+    description: 'Array of ClassRoom model instances',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(ClassRoom, {includeRelations: true}),
+        },
+      },
+    },
+  })
+  async getClassRoomByStudentNumGreater(
+    @param.path.number("studentNum") studentNum: number
+  ): Promise<((ClassRoom & ClassRoomRelations) | undefined)[]> {
+
+    const allClass = await this.mainRepo.find();
+
+    const result = await this.validateService.fillClassHasEnoughStudents(allClass, studentNum)
+
+    return result
+
+
+
+}
+
 
   @post('/addTeacherToClass/{teacherId}/{classId}')
   async addTeachToClass(
@@ -112,11 +155,11 @@ export class ClassController {
 
       this.userRepository.updateById(teacherid, {
         classRoomId: classId,
-        status: 'Active'
+        status: activedStatus
       }),
 
-      this.classRoomRepository.updateById(classId, {
-        status: "Active"
+      this.mainRepo.updateById(classId, {
+        status: activedStatus
       })
     ])
 
@@ -139,7 +182,7 @@ export class ClassController {
 
     await this.userRepository.updateById(studentid, {
       classRoomId: classId,
-      status: "Active"
+      status: activedStatus
     });
 
     }
@@ -152,7 +195,7 @@ export class ClassController {
   async count(
     @param.where(ClassRoom) where?: Where<ClassRoom>,
   ): Promise<Count> {
-    return this.classRoomRepository.count(where);
+    return this.mainRepo.count(where);
   }
 
 
@@ -179,8 +222,8 @@ export class ClassController {
         const foundTeacher = await this.userRepository.findOne({
           where: {
             classRoomId: classId,
-            type: "Teacher",
-            status: 'Active'
+            type: teacherType,
+            status: activedStatus
           }
         });
 
@@ -216,7 +259,7 @@ export class ClassController {
         where: {
           classRoomId: classId,
           type: "Student",
-          status: 'Active'
+          status: activedStatus
         }
       });
 
@@ -233,7 +276,7 @@ export class ClassController {
 
       return this.userRepository.count({
         classRoomId: classId,
-        status: 'Active'
+        status: activedStatus
       });
 
     }
@@ -251,7 +294,7 @@ export class ClassController {
     @param.path.string('id') id: string,
     @param.filter(ClassRoom, {exclude: 'where'}) filter?: FilterExcludingWhere<ClassRoom>
   ): Promise<ClassRoom> {
-    return this.classRoomRepository.findById(id, filter);
+    return this.mainRepo.findById(id, filter);
   }
 
   @patch('/class-rooms/{id}')
@@ -269,7 +312,7 @@ export class ClassController {
     })
     classRoom: ClassRoom,
   ): Promise<void> {
-    await this.classRoomRepository.updateById(id, classRoom);
+    await this.mainRepo.updateById(id, classRoom);
   }
 
   @put('/class-rooms/{id}')
@@ -280,7 +323,7 @@ export class ClassController {
     @param.path.string('id') id: string,
     @requestBody() classRoom: ClassRoom,
   ): Promise<void> {
-    await this.classRoomRepository.replaceById(id, classRoom);
+    await this.mainRepo.replaceById(id, classRoom);
   }
 
 

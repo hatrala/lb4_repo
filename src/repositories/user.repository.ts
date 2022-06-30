@@ -1,15 +1,15 @@
-
-import {inject, Getter} from '@loopback/core';
+import {inject, Getter, Constructor} from '@loopback/core';
 import {DefaultCrudRepository, repository, BelongsToAccessor} from '@loopback/repository';
 import {MongoDbDataSource} from '../datasources';
+import {RepositoryMixin} from '../mixins/repository-mixin';
 import { User, UserRelations, ClassRoom} from '../models';
 import {ClassRoomRepository} from './class-room.repository';
 
-export  class UserRepository extends DefaultCrudRepository<
+export  class UserRepository extends RepositoryMixin<
   User,
-  typeof User.prototype.id,
-  UserRelations
-> {
+  Constructor<DefaultCrudRepository<User, typeof User.prototype.id, UserRelations>
+  >
+>(DefaultCrudRepository) {
 
   public readonly classRoom: BelongsToAccessor<ClassRoom, typeof User.prototype.id>;
 
