@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-invalid-this */
 import {MixinTarget} from '@loopback/core';
 import { Entity, Where} from '@loopback/repository';
-import {Based} from './mixin-interface';
 import {param, get, getModelSchemaRef, HttpErrors, patch, requestBody, del, post} from '@loopback/rest';
+import {AuditingRepository} from './repository-mixin';
+
 
 /**
  * Options to mix in findByTitle
@@ -10,11 +12,11 @@ export interface ControllerMixinOptions {
   /**
    * Base path for the controller
    */
-  basePath: string;
+   basePath: string;
   /**
    * Model class for CRUD
    */
-  modelClass: typeof Entity;
+   modelClass: typeof Entity;
 
 }
 
@@ -27,14 +29,14 @@ export interface ControllerMixinOptions {
  * @typeParam T - Base class
  */
 
-export function ControllerMixin<
+  export function ControllerMixin<
   M extends Entity,
   T extends MixinTarget<object>,
+  R extends AuditingRepository<M, string>
 >(superClass: T, options: ControllerMixinOptions) {
-  class MixedController extends superClass implements Based<M> {
+  class MixedController extends superClass {
     // Value will be provided by the subclassed controller class
-    mainRepo: Based<M>;
-    mainService: Based<M>;
+    mainRepo: R;
 
     @get(`/${options.basePath}/find`, {
       responses: {
@@ -53,20 +55,20 @@ export function ControllerMixin<
         },
       },
     })
-    async findByFilter(
-      @param.query.object('filter') filter: Where<M>
+    async find(
+      @param.query.object('filter', Object) filter: Where<M>
     ): Promise<M[]> {
       try {
-        return await this.mainRepo.findByFilter(filter);
+        return await this.mainRepo.find({where: filter});
       } catch (error) {
-        throw new HttpErrors.NotAcceptable(`${error}`)
+        throw new HttpErrors[404](`${error}`)
       }
 
     }
 
-    @patch(`/${options.basePath}/update/{${options.basePath}Id}`)
+    @patch(`/${options.basePath}/update/{id}`)
     async updateOne(
-      @param.path.string(`${options.basePath}Id`) id: string,
+      @param.path.string(`id`) id: string,
       @requestBody({
         content: {
           'application/json': {
@@ -83,32 +85,19 @@ export function ControllerMixin<
       updateData: Object
     ): Promise<void> {
       try {
-        await this.mainRepo.updateOne(id, updateData);
+        await this.mainRepo.updateById(id, updateData);
       } catch (error) {
         throw new HttpErrors.NotAcceptable(`${error}`)
       }
 
     }
 
-    @del(`/${options.basePath}`)
+    @del(`/${options.basePath}/{id}`)
     async deleteByFilter(
-      @requestBody({
-        content: {
-          'application/json': {
-            schema: {
-              items: getModelSchemaRef(Object,
-                {
-                  exclude: []
-                },
-              ),
-            },
-          },
-        },
-      })
-      filter: Where<M>
+      @param.path.string(`id`) id: string,
     ): Promise<void> {
       try {
-         await this.mainRepo.deleteByFilter(filter);
+         await this.mainRepo.deleteById(id);
       } catch (error) {
         throw new HttpErrors.NotAcceptable(`${error}`)
       }
@@ -133,13 +122,16 @@ export function ControllerMixin<
       object: M
     ): Promise<M> {
       try {
-        return await this.mainRepo.createOne(object);
+        return await this.mainRepo.create(object);
       } catch (error) {
         throw new HttpErrors.NotAcceptable(`${error}`)
       }
     }
-    
+
   }
 
   return MixedController;
 }
+
+
+

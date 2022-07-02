@@ -1,22 +1,30 @@
+import {authenticate} from '@loopback/authentication';
 import {Constructor, service} from '@loopback/core';
+import {repository} from '@loopback/repository';
 import {
-  repository,
-} from '@loopback/repository';
-import {
-  post,
+  get,
   getModelSchemaRef,
+  HttpErrors,
+  param,
+  patch,
+  post,
   requestBody,
   response,
-  HttpErrors,
-  patch,
-  param,
-  get,
 } from '@loopback/rest';
-import {activedStatus} from '../config';
-import {ControllerMixin, ControllerMixinOptions} from '../mixins/controller-mixin';
+import {activedStatus, studentType} from '../config';
+import {
+  ControllerMixin,
+  ControllerMixinOptions,
+} from '../mixins/controller-mixin';
+import {AuditingRepository} from '../mixins/repository-mixin';
 import {Lession, StudentScore, User} from '../models';
-import {LessionRepository, StudentScoreRepository, UserRepository} from '../repositories';
+import {
+  LessionRepository,
+  StudentScoreRepository,
+  UserRepository,
+} from '../repositories';
 import {ValidateService} from '../services';
+import {UserService} from '../services/user.service';
 
 const options: ControllerMixinOptions = {
   basePath: 'lession',
@@ -25,22 +33,82 @@ const options: ControllerMixinOptions = {
 
 export class LessionController extends ControllerMixin<
   Lession,
-  Constructor<Object>
+  Constructor<Object>,
+  AuditingRepository<Lession, string>
 >(Object, options) {
   constructor(
     @repository(LessionRepository)
-    public mainRepo : LessionRepository,
+    public mainRepo: LessionRepository,
     @repository(StudentScoreRepository)
-    public studentScoreRepo : StudentScoreRepository,
+    public studentScoreRepo: StudentScoreRepository,
     @repository(UserRepository)
-    public userRepository : UserRepository,
+    public userRepository: UserRepository,
+
     @service(ValidateService)
-    public validservice : ValidateService
+    public validservice: ValidateService,
+    @service(UserService)
+    public userService: UserService,
   ) {
     super();
   }
 
-  @post('/Create-lession')
+  @authenticate('jwt')
+  @patch('/lession/EditScore/{id}')
+  async edditScore(
+    @param.path.string('id') id: string,
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(StudentScore, {
+            title: 'abc',
+            exclude: [
+              'id',
+              'created',
+              'createdByID',
+              'modified',
+              'modifiedByID',
+              'status',
+              'lessionId',
+              'studentId',
+            ],
+          }),
+        },
+      },
+    })
+    newScore: StudentScore,
+  ): Promise<void> {
+    await this.validservice.authorizeWhenUpdateScore(id);
+
+    try {
+      await this.studentScoreRepo.updateById(id, newScore);
+    } catch (error) {
+      throw new HttpErrors[400](error);
+    }
+  }
+
+  @authenticate('jwt')
+  @get('/lession/viewStudentScore/{studentId}')
+  @response(200, {
+    description: 'List of score of student',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+        },
+      },
+    },
+  })
+  async getStudentScore(
+    @param.path.string('studentId') studentId: string,
+  ): Promise<Array<Object>> {
+    await this.validservice.authorizeWhenGetScore(studentId);
+
+    const studentScore = await this.userService.getStudentScore(studentId);
+    return studentScore;
+  }
+
+  @authenticate('jwt')
+  @post('/lession/create')
   @response(200, {
     description: 'Lession model instance',
     content: {'application/json': {schema: getModelSchemaRef(Lession)}},
@@ -52,8 +120,12 @@ export class LessionController extends ControllerMixin<
           schema: getModelSchemaRef(Lession, {
             title: 'NewLession',
             exclude: [
-              'id', 'created', 'createdByID',
-              'modified', 'modifiedByID', 'status'
+              'id',
+              'created',
+              'createdByID',
+              'modified',
+              'modifiedByID',
+              'status',
             ],
           }),
         },
@@ -61,17 +133,16 @@ export class LessionController extends ControllerMixin<
     })
     lession: Omit<Lession, 'id'>,
   ): Promise<Lession> {
-    const isExited = await this.mainRepo.findOne({where: {lessionName: lession.lessionName}})
-    if(isExited) {
-      throw new HttpErrors.NotAcceptable("This lession name already exited")
-    }
-    return this.mainRepo.create(lession);
+    await this.validservice.authorizeTeacher();
+    await this.validservice.checkDuplicateLession(lession);
 
+    return this.mainRepo.create(lession);
   }
 
-  @post('/LessionController/Student-scorce')
+  @authenticate('jwt')
+  @post('/lession/addStudentToLession')
   @response(200, {
-    description: 'Lession model instance',
+    description: 'studentScore model instance',
     content: {'application/json': {schema: getModelSchemaRef(StudentScore)}},
   })
   async createStudentScore(
@@ -79,128 +150,71 @@ export class LessionController extends ControllerMixin<
       content: {
         'application/json': {
           schema: getModelSchemaRef(StudentScore, {
-            title: 'NewStudentScore',
+            title: 'score',
             exclude: [
-              'id', 'created', 'createdByID',
-              'modified', 'modifiedByID', 'score', 'status'
+              'id',
+              'created',
+              'createdByID',
+              'modified',
+              'modifiedByID',
+              'status',
+              'score',
             ],
           }),
         },
       },
     })
-    studentScore: Omit<StudentScore, 'id'>,
+    studentScore: StudentScore,
   ): Promise<StudentScore> {
-
-    const isExitedStudentScore = await this.studentScoreRepo.findOne({where: {studentID: studentScore.studentID, lessionID: studentScore.lessionID}})
-
-    if (isExitedStudentScore) {
-
-      throw new HttpErrors.NotAcceptable("StudentScore already exited")
-
-    }
-
-
-     const checkExitedLession = async () => {
-
-      const isExitedLession = await this.mainRepo.findById(studentScore.lessionID)
-
-      if(!isExitedLession) {
-
-       throw new HttpErrors.NotAcceptable("Lession not exist")
-
-      }
-    }
-
-    const type = "Student"
+    await this.validservice.authorizeTeacher();
+    await this.validservice.checkDuplicateStudentScore(studentScore);
 
     await Promise.all([
+      this.validservice.checkExitedLessionById(studentScore.lessionId),
+      this.validservice.checkExitedUser(studentScore.studentId, studentType),
+    ]);
 
-      checkExitedLession(),
+    await this.validservice.verifyTeacherAndStudentRelation(
+      studentScore.studentId,
+    );
 
-      this.validservice.checkExitedUser(studentScore.studentID, type)
-
-    ])
-
-    studentScore.status = activedStatus
-    return this.studentScoreRepo.create(studentScore)
-
+    studentScore.status = activedStatus;
+    return this.studentScoreRepo.create(studentScore);
   }
 
-  @get('/LessionController/get-list-of-Student-by-lession/{lessionID}')
-    @response(200, {
-      description: 'List of student by lession',
-      content: {
-        'application/json': {
-          schema: {
-            type: 'array',
-            items: getModelSchemaRef(User, {includeRelations: true}),
-          },
+  @authenticate('jwt')
+  @get('/lession/get-list-of-Student-by-lession/{lessionId}')
+  @response(200, {
+    description: 'List of student by lession',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(User, {includeRelations: true}),
         },
       },
-    })
-    async findStudentByLession(
+    },
+  })
+  async findStudentByLession(
+    @param.path.string('lessionId') id: string,
+  ): Promise<unknown> {
+    await this.validservice.authorizeTeacher();
 
-      @param.path.string ('lessionID') id: string,
+    const studentLessionList = await this.studentScoreRepo.find({
+      where: {lessionId: id},
+    });
+    const studentIDlist = await Promise.all(
+      studentLessionList.map(async studentLession => {
+        return {id: studentLession.studentId};
+      }),
+    );
 
-    ): Promise<unknown> {
-
-      const studentLessionList = await this.studentScoreRepo.find({where: {lessionID: id}});
-
-      const studentIDlist = await Promise.all(
-
-        studentLessionList.map(async (studentLession) => {
-
-          return {id: studentLession.studentID}
-
-        })
-
-      )
-
-      const studentList = await this.userRepository.find({
-        where: {
-          or:studentIDlist
-        }
-      })
-
-      return studentList
-
-    }
-
-
-  @patch('/LessionController/Eddit Score')
-  async edditScore(
-    @requestBody({
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(StudentScore, {
-            title: 'NewStudentScore',
-            exclude: [
-              'id', 'created', 'createdByID',
-              'modified', 'modifiedByID', 'status'
-            ],
-          }),
-        },
+    const studentList = await this.userRepository.find({
+      where: {
+        or: studentIDlist,
       },
-    })
-    studentScore: Omit<StudentScore, 'id'>,
-  ): Promise<void> {
+    });
 
-    const foundStudentScore = await this.studentScoreRepo.findOne({
-      where:{
-        studentID: studentScore.studentID,
-        lessionID: studentScore.lessionID
-      }
-    })
-
-    if(foundStudentScore) {
-
-      throw new HttpErrors.NotAcceptable("Student may not existed or student did not learn this lession")
-
-    }
-
-    await this.studentScoreRepo.updateById(foundStudentScore!.id, {score: studentScore.score});
-
-    }
-
-
+    return studentList;
+  }
 }

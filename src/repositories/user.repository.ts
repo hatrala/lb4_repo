@@ -1,16 +1,16 @@
-import {inject, Getter, Constructor} from '@loopback/core';
-import {DefaultCrudRepository, repository, BelongsToAccessor} from '@loopback/repository';
+import {inject, Getter} from '@loopback/core';
+import { repository, BelongsToAccessor} from '@loopback/repository';
 import {MongoDbDataSource} from '../datasources';
-import {RepositoryMixin} from '../mixins/repository-mixin';
+import {AuditingRepository} from '../mixins/repository-mixin';
 import { User, UserRelations, ClassRoom} from '../models';
 import {ClassRoomRepository} from './class-room.repository';
 
-export  class UserRepository extends RepositoryMixin<
-  User,
-  Constructor<DefaultCrudRepository<User, typeof User.prototype.id, UserRelations>
+export  class UserRepository extends AuditingRepository<
+    User,
+    typeof User.prototype.id,
+    UserRelations
   >
->(DefaultCrudRepository) {
-
+ {
   public readonly classRoom: BelongsToAccessor<ClassRoom, typeof User.prototype.id>;
 
   constructor(

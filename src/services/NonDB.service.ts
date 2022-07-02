@@ -1,12 +1,26 @@
 import { repository} from '@loopback/repository';
-import {HttpErrors} from '@loopback/rest';
+import {HttpErrors, SchemaObject} from '@loopback/rest';
 
 // import bcrypt from 'bcryptjs'
 // import {setTimeout} from 'timers';
 import validator from 'validator';
-import {User} from '../models';
+import {ClassRoom, ClassRoomRelations, User} from '../models';
 import {UserRepository} from '../repositories';
 
+import bcrypt from 'bcryptjs';
+
+const ChangePasswordSchema: SchemaObject = {
+  type: 'object',
+  required: ['oldpassword', 'newpassword'],
+  properties: {
+    oldpassword: {
+      type: 'string',
+    },
+    newpassword: {
+      type: 'string',
+    },
+  },
+};
 
 export class NonDbService {
   constructor(
@@ -29,9 +43,9 @@ export class NonDbService {
         }
  }
 
-async verifyPassword(user:User):Promise<void> {
+async verifyPassword(password: string):Promise<void> {
   const isValidPassWord =
-    validator.isStrongPassword(user.password, {
+    validator.isStrongPassword(password, {
       minLength: 8,
       minLowercase: 1,
       minUppercase: 1,
@@ -42,41 +56,50 @@ async verifyPassword(user:User):Promise<void> {
     if (!isValidPassWord) {
       throw new HttpErrors.NotAcceptable("Password is not match requirements")
     }
+  }
+
+  async verifyEmail (email: string): Promise<void>{
+    const isEmail = validator.isEmail(email)
+
+    if (!isEmail) {
+      throw new HttpErrors.NotAcceptable("Email is not match requirements")
     }
+  }
 
   async verifyEmailAndPassWord(requestUser: User): Promise<void> {
 
-    const verifyEmail = () =>{
-      const isEmail = validator.isEmail(requestUser.email)
+    await Promise.all([
+      this.verifyEmail(requestUser.email),
+      this.verifyPassword(requestUser.password)
+    ])
+  }
 
-      if (!isEmail) {
-        return "Email is not valid"
+ async hashPassword(password: string): Promise<string> {
+
+   const salt = await bcrypt.genSalt(10);
+   password = await bcrypt.hash(password, salt);
+
+   return password
+
+ }
+
+  async deleteNullElementFromClassArray (array:((ClassRoom & ClassRoomRelations) | undefined)[]): Promise<((ClassRoom & ClassRoomRelations) | undefined)[]> {
+    for (let i = 0; i < array.length; i++) {
+      if (!array[i]) {
+        array.splice(i, 1);
+        i--;
       }
     }
+    return array
+  }
 
-    const verifyPassWord = async () =>{
-      const isValidPassWord =
-    validator.isStrongPassword(requestUser.password, {
-      minLength: 8,
-      minLowercase: 1,
-      minUppercase: 1,
-      minNumbers: 1,
-      minSymbols: 1,
-    })
+ async verifyPasswordFormatBeforeChange(changePasswordObject: typeof ChangePasswordSchema): Promise<void> {
 
-    if (!isValidPassWord) {
-      return "Password is not match requirements"
-    }
-    }
+  await Promise.all([
+    this.verifyPassword(changePasswordObject.newpassword),
+    this.verifyPassword(changePasswordObject.oldpassword)
+  ])
 
-    await Promise.all([verifyEmail(), verifyPassWord()]).then(result =>{
-
-      if(typeof result[0] === typeof "string" || typeof result[1] === typeof "string"){
-        throw new HttpErrors.NotAcceptable(`${result}`)
-
-      }
-
-    })
-}
+ }
 
 }

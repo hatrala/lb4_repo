@@ -1,26 +1,31 @@
+import {authenticate} from '@loopback/authentication';
 import {Constructor, service} from '@loopback/core';
 import {
   Count,
   CountSchema,
-  FilterExcludingWhere,
   repository,
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
-  patch,
-  put,
-  del,
+  HttpErrors,
+  param,
+  post,
   requestBody,
   response,
-  HttpErrors,
 } from '@loopback/rest';
-import {activedStatus, deletedStatus, draftStatus, teacherType} from '../config';
-import {ControllerMixin, ControllerMixinOptions} from '../mixins/controller-mixin';
-import {ClassRoom, ClassRoomRelations, User} from '../models';
+import {
+  activedStatus,
+  studentType,
+} from '../config';
+import {
+  ControllerMixin,
+  ControllerMixinOptions,
+} from '../mixins/controller-mixin';
+import {AuditingRepository} from '../mixins/repository-mixin';
+import {ClassRoom, User} from '../models';
 import {ClassRoomRepository, UserRepository} from '../repositories';
 import {NonDbService, ValidateService} from '../services';
 
@@ -29,26 +34,27 @@ const options: ControllerMixinOptions = {
   modelClass: ClassRoom,
 };
 
-
 export class ClassController extends ControllerMixin<
   ClassRoom,
-  Constructor<Object>
+  Constructor<Object>,
+  AuditingRepository<ClassRoom, string>
 >(Object, options) {
   constructor(
     @repository(ClassRoomRepository)
-    public mainRepo : ClassRoomRepository,
+    public mainRepo: ClassRoomRepository,
     @repository(UserRepository)
-    public userRepository : UserRepository,
+    public userRepository: UserRepository,
 
     @service(ValidateService)
     public validateService: ValidateService,
     @service(NonDbService)
-    public nonDbService: NonDbService
+    public nonDbService: NonDbService,
   ) {
     super();
   }
 
-  @post('/create-classroom')
+  @authenticate('jwt')
+  @post('/classRoom/create')
   @response(200, {
     description: 'ClassRoom model instance',
     content: {'application/json': {schema: getModelSchemaRef(ClassRoom)}},
@@ -59,10 +65,13 @@ export class ClassController extends ControllerMixin<
         'application/json': {
           schema: getModelSchemaRef(ClassRoom, {
             title: 'NewClassRoom',
-            exclude:
-            [
-              'id', 'created', 'createdByID',
-              'modified', 'modifiedByID', "status"
+            exclude: [
+              'id',
+              'created',
+              'createdByID',
+              'modified',
+              'modifiedByID',
+              'status',
             ],
           }),
         },
@@ -70,122 +79,55 @@ export class ClassController extends ControllerMixin<
     })
     classRoom: Omit<ClassRoom, 'id'>,
   ): Promise<ClassRoom> {
+    await this.validateService.authorizeTeacher();
+    await this.validateService.checkDuplicateClass(classRoom);
 
-    await this.validateService.checkDuplicateClass(classRoom)
-    return this.mainRepo.create(classRoom);
-
-  }
-
-  @del('/class-rooms/Delete/{id}')
-  @response(204, {
-    description: 'ClassRoom DELETE success',
-  })
-  async deleteById(
-    @param.path.string('id') id: string
-    ): Promise<void> {
-
-      await this.userRepository.updateAll({status: draftStatus}, {classRoomId: id})
-
-      await this.mainRepo.updateById(id, {status: deletedStatus});
-
-  }
-
-  @get('/get-all-class-room')
-  @response(200, {
-    description: 'Array of ClassRoom model instances',
-    content: {
-      'application/json': {
-        schema: {
-          type: 'array',
-          items: getModelSchemaRef(ClassRoom, {includeRelations: true}),
-        },
-      },
-    },
-  })
-  async getAllClassRoom(
-    // @param.filter(ClassRoom) filter?: Filter<ClassRoom>,
-  ): Promise<ClassRoom[]> {
-    return this.mainRepo.find();
-  }
-
-  @get('/class-rooms/get-class-room-has-more-than{studentNum}')
-  @response(200, {
-    description: 'Array of ClassRoom model instances',
-    content: {
-      'application/json': {
-        schema: {
-          type: 'array',
-          items: getModelSchemaRef(ClassRoom, {includeRelations: true}),
-        },
-      },
-    },
-  })
-  async getClassRoomByStudentNumGreater(
-    @param.path.number("studentNum") studentNum: number
-  ): Promise<((ClassRoom & ClassRoomRelations) | undefined)[]> {
-
-    const allClass = await this.mainRepo.find();
-
-    const result = await this.validateService.fillClassHasEnoughStudents(allClass, studentNum)
-
-    return result
-
-
-
-}
-
-
-  @post('/addTeacherToClass/{teacherId}/{classId}')
-  async addTeachToClass(
-    @param.path.string('teacherId') teacherid: string,
-    @param.path.string ('classId') classId: string,
-  ): Promise<void> {
-
-    const type = "Teacher"
-
-    await Promise.all([
-
-      this.validateService.verifyUserWhenAddToClass(teacherid, type),
-
-      this.validateService.verifyClassWhenAddUserToClass(classId, type)
-
-    ])
-
-    await Promise.all([
-
-      this.userRepository.updateById(teacherid, {
-        classRoomId: classId,
-        status: activedStatus
-      }),
-
-      this.mainRepo.updateById(classId, {
-        status: activedStatus
-      })
-    ])
-
+    const teacherId = (await this.validateService.headerTokenDecode()).id;
+    const teacherInfo = await this.userRepository.findById(teacherId)
+    if(teacherInfo.classRoomId) {
+      throw new HttpErrors[400]("Teacher already has a class")
     }
 
-  @post('/addStudentToClass/{studentId}/{classId}')
-  async addStudentToClass(
+    const newclass = await this.mainRepo.create(classRoom);
 
-  @param.path.string('studentId') studentid: string,
-  @param.path.string ('classId') classId: string,
-
-  ): Promise<void> {
-
-    const type = "Student"
-
-    await Promise.all([
-      this.validateService.verifyUserWhenAddToClass(studentid, type),
-      this.validateService.verifyClassWhenAddUserToClass(classId, type)
-    ])
-
-    await this.userRepository.updateById(studentid, {
-      classRoomId: classId,
-      status: activedStatus
+    await this.userRepository.updateById(teacherId, {
+      classRoomId: newclass.id,
     });
 
+    return newclass;
+  }
+
+  @authenticate('jwt')
+  @post('/addStudentToClass/{studentId}')
+  async addStudentToClass(
+    @param.path.string('studentId') studentid: string,
+  ): Promise<void> {
+    await this.validateService.authorizeTeacher();
+
+    const teacher = await this.validateService.headerTokenDecode();
+    if(!teacher.classid) {
+      throw new HttpErrors[401]
     }
+
+    await Promise.all([
+      this.validateService.verifyUserWhenAddToClass(studentid, studentType),
+    ]);
+
+    await this.userRepository.updateById(studentid, {
+      classRoomId: teacher.classid,
+      status: activedStatus,
+    });
+  }
+
+  @authenticate('jwt')
+  @del('/class/deleteStudent/{studentId}')
+  async deleteStudentFromClass(
+    @param.path.string('studentId') studentid: string,
+  ): Promise<void> {
+    await this.validateService.authorizeTeacher();
+    const student = await this.userRepository.findById(studentid);
+    await this.userRepository.replaceById(studentid, student);
+  }
 
   @get('/class-rooms/count')
   @response(200, {
@@ -198,133 +140,51 @@ export class ClassController extends ControllerMixin<
     return this.mainRepo.count(where);
   }
 
-
-  @get('/get-Teacher-info-of-class/{classId}')
-    @response(200, {
-      description: 'List of student in class',
-      content: {
-        'application/json': {
-          schema: {
-            type: 'array',
-            items: getModelSchemaRef(User, {includeRelations: true}),
-          },
-        },
-      },
-    })
-    async findTeacherOfClass(
-
-      @param.path.string ('classId') classId: string,
-
-    ): Promise<User | unknown> {
-
-
-
-        const foundTeacher = await this.userRepository.findOne({
-          where: {
-            classRoomId: classId,
-            type: teacherType,
-            status: activedStatus
-          }
-        });
-
-        if(!foundTeacher) {
-          throw new HttpErrors.NotAcceptable("This class dont have a active teacher or class has been deactive")
-        }
-
-        return foundTeacher
-
-
-
-    }
-
-    @get('/get-list-of-Student-in-class/{classId}')
-    @response(200, {
-      description: 'List of student in class',
-      content: {
-        'application/json': {
-          schema: {
-            type: 'array',
-            items: getModelSchemaRef(User, {includeRelations: true}),
-          },
-        },
-      },
-    })
-    async findStudentInClass(
-
-      @param.path.string ('classId') classId: string,
-
-    ): Promise<User[]> {
-
-      return this.userRepository.find({
-        where: {
-          classRoomId: classId,
-          type: "Student",
-          status: activedStatus
-        }
-      });
-
-    }
-
-    @get('/student/count-in-class/{classId}')
-    @response(200, {
-      description: 'User model count',
-      content: {'application/json': {schema: CountSchema}},
-    })
-    async countStudent(
-      @param.path.string ('classID') classId: string,
-    ): Promise<Count> {
-
-      return this.userRepository.count({
-        classRoomId: classId,
-        status: activedStatus
-      });
-
-    }
-
-  @get('/class-rooms/{id}')
+  @authenticate('jwt')
+  @get('/get-list-of-Student-in-class/{classId}')
   @response(200, {
-    description: 'ClassRoom model instance',
+    description: 'List of student in class',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ClassRoom, {includeRelations: true}),
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(User, {includeRelations: true}),
+        },
       },
     },
   })
-  async findById(
-    @param.path.string('id') id: string,
-    @param.filter(ClassRoom, {exclude: 'where'}) filter?: FilterExcludingWhere<ClassRoom>
-  ): Promise<ClassRoom> {
-    return this.mainRepo.findById(id, filter);
-  }
+  async findStudentInClass(
+    @param.path.string('classId') classId: string,
+  ): Promise<User[]> {
+    await this.validateService.authorizeTeacher();
 
-  @patch('/class-rooms/{id}')
-  @response(204, {
-    description: 'ClassRoom PATCH success',
-  })
-  async updateById(
-    @param.path.string('id') id: string,
-    @requestBody({
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(ClassRoom, {partial: true}),
-        },
+    const teacher = await this.validateService.headerTokenDecode();
+    if (teacher.classid !== classId) {
+      throw new HttpErrors[403]();
+    }
+
+    return this.userRepository.find({
+      where: {
+        classRoomId: classId,
+        type: studentType,
       },
-    })
-    classRoom: ClassRoom,
-  ): Promise<void> {
-    await this.mainRepo.updateById(id, classRoom);
+    });
   }
 
-  @put('/class-rooms/{id}')
-  @response(204, {
-    description: 'ClassRoom PUT success',
+  @authenticate('jwt')
+  @get('/student/countStudent')
+  @response(200, {
+    description: 'User model count',
+    content: {'application/json': {schema: CountSchema}},
   })
-  async replaceById(
-    @param.path.string('id') id: string,
-    @requestBody() classRoom: ClassRoom,
-  ): Promise<void> {
-    await this.mainRepo.replaceById(id, classRoom);
-  }
+  async countStudent(
+  ): Promise<Count> {
+    const teacher = await this.validateService.headerTokenDecode()
 
+    return this.userRepository.count({
+      classRoomId: teacher.classid,
+      type: studentType
+    });
+  }
 
 }

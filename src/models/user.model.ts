@@ -1,12 +1,22 @@
-import { model, property, belongsTo} from '@loopback/repository';
-import { BasedModel } from './based.model';
+import {belongsTo, model, property} from '@loopback/repository';
+import {BasedModel} from './based.model';
 import {ClassRoom} from './class-room.model';
 
-@model({setting: {stict: false}})
+@model({
+  setting: {strict: false},
+  indexes: {
+    username: {
+      keys: {
+        username: 1
+      },
+      options: { unique: true },
+    },
+  },
+})
 export class User extends BasedModel {
-
   @property({
     type: 'string',
+    id: true,
     required: true,
     unique: true,
   })
@@ -15,7 +25,7 @@ export class User extends BasedModel {
   @property({
     type: 'string',
     required: true,
-    unique: true
+    unique: true,
   })
   email: string;
 
@@ -38,15 +48,13 @@ export class User extends BasedModel {
   age: number;
 
   @property({
-    type: 'string',
     required: true,
   })
-  gender: "Male" | "Female" | "Unknown";
+  gender: 'male' | 'female' | 'unknown';
 
   @property({
     type: 'string',
     required: true,
-    default: "Student"
   })
   type: string;
 
@@ -63,7 +71,5 @@ export interface UserRelations {
 }
 
 export type UserWithRelations = User & UserRelations;
-
-
 
 // {settings: {strict: false}}

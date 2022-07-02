@@ -1,16 +1,15 @@
-import {Constructor, inject} from '@loopback/core';
-import {DefaultCrudRepository, HasOneRepositoryFactory} from '@loopback/repository';
+import {inject} from '@loopback/core';
+import {HasOneRepositoryFactory} from '@loopback/repository';
 import {MongoDbDataSource} from '../datasources';
-import {RepositoryMixin} from '../mixins/repository-mixin';
+import {AuditingRepository} from '../mixins/repository-mixin';
 import {ClassRoom, ClassRoomRelations, User} from '../models';
 
 
-export class ClassRoomRepository extends RepositoryMixin<
+export class ClassRoomRepository extends AuditingRepository<
   ClassRoom,
-  Constructor<
-    DefaultCrudRepository<ClassRoom, typeof ClassRoom.prototype.id, ClassRoomRelations>
-  >
-  >(DefaultCrudRepository) {
+  typeof ClassRoom.prototype.id,
+  ClassRoomRelations
+> {
 
     public readonly teacher: HasOneRepositoryFactory<User, typeof ClassRoom.prototype.id>;
 

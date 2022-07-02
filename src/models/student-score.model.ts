@@ -7,20 +7,20 @@ export class StudentScore extends BasedModel {
     type: 'string',
     required: true,
   })
-  studentID: string;
+  studentId: string;
 
   @property({
     type: 'string',
     required: true,
   })
-  lessionID: string;
+  lessionId: string;
 
   @property({
     type: 'number',
-    default: 0
+    required: true,
+    default: 0,
   })
-  score?: number;
-
+  score: number;
 
   constructor(data?: Partial<StudentScore>) {
     super(data);
