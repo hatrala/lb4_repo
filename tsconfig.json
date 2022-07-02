@@ -2,8 +2,19 @@
   "$schema": "http://json.schemastore.org/tsconfig",
   "extends": "@loopback/build/config/tsconfig.common.json",
   "compilerOptions": {
+    "experimentalDecorators": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "lib": [
+      "ES2015",
+      "ES2016",
+      "ES2017",
+      "ES2018",
+      "ES2019",
+      "ES2020",
+      "ES2021",
+      "ESNext"
+    ]
   },
   "include": ["src"]
 

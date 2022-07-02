@@ -1,29 +1,33 @@
-import {Entity, model, property, belongsTo} from '@loopback/repository';
-import {Group} from './group.model';
+import {belongsTo, model, property} from '@loopback/repository';
+import {BasedModel} from './based.model';
+import {ClassRoom} from './class-room.model';
 
-@model()
-export class User extends Entity {
+@model({
+  setting: {strict: false},
+  indexes: {
+    username: {
+      keys: {
+        username: 1
+      },
+      options: { unique: true },
+    },
+  },
+})
+export class User extends BasedModel {
   @property({
     type: 'string',
+    id: true,
     required: true,
+    unique: true,
   })
   username: string;
 
   @property({
     type: 'string',
     required: true,
+    unique: true,
   })
   email: string;
-
-  @property({
-    type: 'number',
-    id: true,
-    generated: false,
-    required: false,
-    default: 0,
-    forceid: false
-  })
-  id: number;
 
   @property({
     type: 'string',
@@ -31,8 +35,31 @@ export class User extends Entity {
   })
   password: string;
 
-  @belongsTo(() => Group)
-  groupId: number;
+  @property({
+    type: 'string',
+    required: true,
+  })
+  name: string;
+
+  @property({
+    type: 'number',
+    required: true,
+  })
+  age: number;
+
+  @property({
+    required: true,
+  })
+  gender: 'male' | 'female' | 'unknown';
+
+  @property({
+    type: 'string',
+    required: true,
+  })
+  type: string;
+
+  @belongsTo(() => ClassRoom)
+  classRoomId: string;
 
   constructor(data?: Partial<User>) {
     super(data);
@@ -44,3 +71,5 @@ export interface UserRelations {
 }
 
 export type UserWithRelations = User & UserRelations;
+
+// {settings: {strict: false}}

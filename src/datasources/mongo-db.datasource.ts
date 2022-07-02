@@ -4,13 +4,15 @@ import {juggler} from '@loopback/repository';
 const config = {
   name: 'mongoDB',
   connector: 'mongodb',
-  url: 'mongodb://localhost:27017',
+  url: 'mongodb://localhost:27017/QLSV',
   host: '',
   port: 0,
   user: '',
   password: '',
   database: '',
-  useNewUrlParser: true
+  useNewUrlParser: true.valueOf,
+  enableGeoIndexing: true,
+
 };
 
 // Observe application's life cycle to disconnect the datasource when
@@ -18,10 +20,12 @@ const config = {
 // gracefully. The `stop()` method is inherited from `juggler.DataSource`.
 // Learn more at https://loopback.io/doc/en/lb4/Life-cycle.html
 @lifeCycleObserver('datasource')
-export class MongoDbDataSource extends juggler.DataSource
-  implements LifeCycleObserver {
+export class MongoDbDataSource
+  extends juggler.DataSource
+  implements LifeCycleObserver
+{
   static dataSourceName = 'mongoDB';
-  static readonly defaultConfig = config;
+  static  defaultConfig = config;
 
   constructor(
     @inject('datasources.config.mongoDB', {optional: true})

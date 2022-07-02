@@ -1,187 +1,204 @@
-import { authenticate, TokenService} from '@loopback/authentication';
-import {
-  // Credentials,
-  // MyUserService,
-  TokenServiceBindings,
-  // User,
-  // UserRepository,
-  UserServiceBindings
-} from '@loopback/authentication-jwt';
-import {inject} from '@loopback/core';
-import {
-  // Count,
-  // CountSchema,
-  // Filter,
-  // FilterExcludingWhere,
-  repository,
-  // Where
-} from '@loopback/repository';
+// import { TokenService} from '@loopback/authentication';
+import {authenticate} from '@loopback/authentication';
+import {TokenServiceBindings} from '@loopback/authentication-jwt';
+import {Constructor, inject, service} from '@loopback/core';
+import {repository} from '@loopback/repository';
 import {
   del,
-   get,
-  getModelSchemaRef, HttpErrors,
+  get,
+  getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
-  // put,
+  put,
+  Request,
   requestBody,
   response,
-  SchemaObject
+  RestBindings,
+  SchemaObject,
 } from '@loopback/rest';
 import {SecurityBindings, UserProfile} from '@loopback/security';
-// import {genSalt, hash} from 'bcryptjs';
-import {User} from '../models';
-import {UserRepository} from '../repositories';
-import { MyUserService, } from '../services/user.service';
-// import { Credentials,} from '../services/user.service';
-import bcrypt from 'bcryptjs'
-import * as jwt from "jsonwebtoken";
-import validator from 'validator';
-// import {omit} from 'lodash';
+import {ClassRoom, User} from '../models';
+import {
+  ClassRoomRepository,
+  StudentScoreRepository,
+  UserRepository,
+} from '../repositories';
+import {Proceducer} from '../services';
+import {NonDbService} from '../services/NonDB.service';
+import {ValidateService} from '../services/validate.service';
+// import {promisify} from 'util';
+import {UserService} from '../services/user.service';
 
-const LoginSchema: SchemaObject = {
+import {deletedStatus} from '../config';
+import {
+  ControllerMixin,
+  ControllerMixinOptions,
+} from '../mixins/controller-mixin';
+import {AuditingRepository} from '../mixins/repository-mixin';
+
+// const jwt = require('jsonwebtoken');
+// const verifyAsync = promisify(jwt.verify);
+
+const ChangePasswordSchema: SchemaObject = {
   type: 'object',
-  required: ['email', 'password'],
+  required: ['oldpassword', 'newpassword'],
   properties: {
+    oldpassword: {
+      type: 'string',
+    },
+    newpassword: {
+      type: 'string',
+    },
+  },
+};
+
+// const UserFilter: SchemaObject = {
+//   type: 'object',
+//   properties: {
+//     id: {
+//       type: 'string',
+//     },
+//     username: {
+//       type: 'string',
+//     },
+//     email: {
+//       type: 'string',
+//     },
+//     gender: {
+//       type: 'string',
+//     },
+//     name: {
+//       type: 'string',
+//     },
+//     type: {
+//       type: 'string',
+//     },
+//     age: {
+//       type: "number",
+//     },
+//   },
+// };
+
+const userUpdateData: SchemaObject = {
+  type: 'object',
+  properties: {
+    username: {
+      type: 'string',
+    },
     email: {
       type: 'string',
-      format: 'email',
     },
-    password: {
+    gender: {
       type: 'string',
-      minLength: 8,
+    },
+    name: {
+      type: 'string',
+    },
+    age: {
+      type: 'number',
     },
   },
 };
 
-export const LoginRequestBody = {
-  description: 'The input of login function',
-  required: true,
-  content: {
-    'application/json': {schema: LoginSchema},
-  },
+const options: ControllerMixinOptions = {
+  basePath: 'user',
+  modelClass: User,
 };
 
-
-
-
-export class UserController {
+export class UserController extends ControllerMixin<
+  User,
+  Constructor<Object>,
+  AuditingRepository<User, string>
+>(Object, options) {
   constructor(
-    // @repository(UserRepository)
-    // public userRepository : UserRepository,
-    @inject(TokenServiceBindings.TOKEN_SERVICE)
-    public jwtService: TokenService,
-    @inject(UserServiceBindings.USER_SERVICE)
-    public userService: MyUserService,
+    @inject(TokenServiceBindings.TOKEN_SECRET)
+    private jwtSecret: string,
     @inject(SecurityBindings.USER, {optional: true})
     public user: UserProfile,
-    @repository(UserRepository) protected userRepository: UserRepository,
-  ) {}
+    @inject(RestBindings.Http.REQUEST) private req: Request,
 
-  @post('/users/singup')
+    @repository(UserRepository)
+    public mainRepo: UserRepository,
+    @repository(ClassRoomRepository)
+    protected classRoomRepository: ClassRoomRepository,
+    @repository(StudentScoreRepository)
+    protected studentLessionRepo: StudentScoreRepository,
+
+    @service(UserService)
+    public userService: UserService,
+    @service(ValidateService)
+    public validService: ValidateService,
+    @service(NonDbService)
+    public nonDbService: NonDbService,
+    @service(Proceducer)
+    public proceducer: Proceducer,
+  ) {
+    super();
+  }
+
+  @authenticate('jwt')
+  @get('/user/classInfo')
   @response(200, {
-    description: 'User model instance',
+    description: 'Class model instances',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(ClassRoom, {includeRelations: true}),
+        },
+      },
+    },
+  })
+  async getClassInfo(): Promise<ClassRoom> {
+    const user = await this.validService.headerTokenDecode();
+    return this.classRoomRepository.findById(user.classid);
+  }
+
+  @post('/user/create-with-conditions')
+  @response(200, {
+    description: 'desc',
     content: {
       'application/json': {
         schema: getModelSchemaRef(User, {
-          exclude: ['id', 'password'],
-          })
-        }
+          exclude: ['password'],
+        }),
       },
+    },
   })
-  async create(
-
+  async createUser(
     @requestBody({
       content: {
         'application/json': {
           schema: getModelSchemaRef(User, {
             title: 'NewUser',
-            exclude: ['id'],
+            exclude: [
+              'id',
+              'created',
+              'modified',
+              'createdByID',
+              'modifiedByID',
+              'classRoomId',
+              'status',
+            ],
           }),
         },
       },
     })
-    user: User
+    user: Omit<User, 'id'>,
   ): Promise<User> {
+    await this.validService.verifyUserWhenCreate(user);
 
+    // user.email = await this.nonDbService.generateEmail(user)
 
-    const generateID = async () => {
-       const count = await this.userRepository.count()
-       return  count.count + 1;
+    user.password = await this.nonDbService.hashPassword(user.password);
 
-    }
-
-    const validate = async (newUser: User) => {
-
-      if(await this.userRepository.findOne({where:{username: newUser.username}}))
-      {
-        // console.log(await this.userRepository.findOne({where:{username: newUser.username}}))
-
-        throw new HttpErrors.NotAcceptable("username is exited");
-
-      }
-
-      if(await this.userRepository.findOne({where:{email: newUser.email}}))
-      {
-
-        throw new HttpErrors.NotAcceptable("email is exited");
-
-      }
-
-      if(!validator.isEmail(newUser.email))
-      {
-
-        throw new HttpErrors.NotAcceptable("Email is not valid");
-
-      }
-
-      if(!validator.isStrongPassword(newUser.password,{minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1}))
-      {
-
-        throw new HttpErrors.NotAcceptable("Password is not match requirements");
-
-      }
-
-    }
-
-
-      await validate(user);
-
-      user.id = await generateID();
-      const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(user.password, salt);
-      // user.password = await hash(user.password, await genSalt(10))
-
-      await this.userRepository.create(user);
-      user.password = '****';
-      return user;
-
+    return this.mainRepo.create(user);
   }
 
-
-  @del('/users/{id}')
-  @response(204, {
-    description: 'User DELETE success',
-    content:{
-      'application/json': {
-        "schema": {
-          message: String
-        }
-      }
-    }
-  })
-  async deleteById(@param.path.number('id') id: number): Promise<String> {
-    await this.userRepository.deleteById(id);
-    const message = "delete successful";
-    return message
-  }
-
-
-
-
-
-
-  @post('/users/login', {
+  @authenticate.skip()
+  @post('/user/login', {
     responses: {
       '200': {
         description: 'Token',
@@ -206,184 +223,260 @@ export class UserController {
         'application/json': {
           schema: getModelSchemaRef(User, {
             title: 'requestUser',
-            exclude: ['email', 'id'],
-          }),
-        },
-      },
-    })
-    user: User
-  ): Promise<{token: String}> {
-
-    const checkUserName =async (requestUser:User) => {
-        if(!await this.userRepository.findOne({where: {username: requestUser.username}}))
-          throw new HttpErrors[404]("Username not exited")
-      }
-    const checkPass =async (requestUser:User) => {
-
-      const foundUser = await this.userRepository.findOne({where:{username: requestUser.username}});
-
-      const pass =  foundUser?.password.toString();
-
-      if(!await bcrypt.compare(requestUser.password, pass!))
-      {
-        throw new HttpErrors.NotAcceptable("password is wrong")
-      }
-
-    }
-
-    const generatedToken =async (requestUser:User) => {
-
-      const foundUser = await this.userRepository.findOne({where:{username: requestUser.username}});
-
-      const email = foundUser?.email.toString();
-      const username = foundUser?.username.toString()
-
-      const token = jwt.sign(
-        { useremail: email, username: username },
-        "superSecretKey",
-        { expiresIn: "1h" }
-      );
-      return token;
-    }
-    await checkUserName(user);
-    await checkPass(user);
-
-    const token = await generatedToken(user);
-
-    return {token};
-
-
-  }
-
-
-  @authenticate('jwt')
-  @get('/users/getInfo', {
-    responses: {
-      '200': {
-        description: 'Return current user',
-        content: {
-          'application/json': {
-            schema: getModelSchemaRef(User, {
-              exclude: ['id', 'password'],
-              })
-          },
-        },
-      },
-    },
-  })
-  async whoAmI(
-
-  ): Promise<void> {
-
-  }
-
-  @patch('/users/{id}')
-  @response(204, {
-    description: 'User PATCH success',
-  })
-  async updateById(
-    @param.path.number('id') id: number,
-    @requestBody({
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(User, {
-            partial: true,
-            exclude: ['id', 'password', 'username', 'email']
+            exclude: [
+              'username',
+              'id',
+              'name',
+              'age',
+              'gender',
+              'modified',
+              'created',
+              'createdByID',
+              'modified',
+              'modifiedByID',
+              'type',
+              'classRoomId',
+              'status',
+            ],
           }),
         },
       },
     })
     user: User,
-  ): Promise<void> {
-    await this.userRepository.updateById(id, user);
+  ): Promise<{token: String}> {
+    await this.validService.verifyUserWhenLogin(user);
+    const token = await this.validService.generateToken(user);
+    return {token};
   }
 
+  @get('/user/GetUserOlderThan{age}')
+  @response(200, {
+    description: 'Array of User model instances',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(User, {includeRelations: true}),
+        },
+      },
+    },
+  })
+  async findUserOlder(@param.path.number('age') age: number): Promise<User[]> {
+    return this.mainRepo.find(
+      {
+        where: {
+          age: {
+            gt: age,
+          },
+        },
+      },
+      {include: ['classRoom']},
+    );
+  }
 
+  @get('/user/GetUserYoungerThan{age}')
+  @response(200, {
+    description: 'Array of User model instances',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(User, {includeRelations: true}),
+        },
+      },
+    },
+  })
+  async findUserYounger(
+    @param.path.number('age') age: number,
+  ): Promise<User[]> {
+    return this.mainRepo.find(
+      {
+        where: {
+          age: {
+            lt: age,
+          },
+        },
+      },
+      {include: ['classRoom']},
+    );
+  }
 
+  @patch('/user/UpdateInfo/{userid}')
+  async updateUserInfo(
+    @param.path.string('userid') userid: string,
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: userUpdateData,
+        },
+      },
+    })
+    updateData: typeof userUpdateData,
+  ): Promise<void> {
+    await this.validService.checkDuplicateUserWhenUpdate(updateData);
+    await this.mainRepo.updateById(userid, updateData);
+  }
 
+  @put('/user/replace')
+  async replaceUser(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            items: getModelSchemaRef(User, {
+              exclude: [],
+            }),
+          },
+        },
+      },
+    })
+    updateData: User,
+  ): Promise<void> {
+    await this.validService.checkDuplicateUserWhenUpdate(updateData);
+    await this.mainRepo.replaceById(updateData.id, updateData);
+  }
 
-//   @get('/users/count')
-//   @response(200, {
-//     description: 'User model count',
-//     content: {'application/json': {schema: CountSchema}},
-//   })
-//   async count(
-//     @param.where(User) where?: Where<User>,
-//   ): Promise<Count> {
-//     return this.userRepository.count(where);
-//   }
+  @authenticate('jwt')
+  @patch('/user/ChangePassword')
+  async changePassword(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: ChangePasswordSchema,
+        },
+      },
+    })
+    changePasswordObject: typeof ChangePasswordSchema,
+  ): Promise<void> {
+    await this.nonDbService.verifyPasswordFormatBeforeChange(
+      changePasswordObject,
+    );
+    await this.validService.verifyOldPasswordBeforeChangePassword(
+      changePasswordObject.oldpassword,
+    );
+    await this.userService.changePassword(changePasswordObject.newpassword);
+  }
 
-//   @get('/users')
-//   @response(200, {
-//     description: 'Array of User model instances',
-//     content: {
-//       'application/json': {
-//         schema: {
-//           type: 'array',
-//           items: getModelSchemaRef(User, {includeRelations: true}),
-//         },
-//       },
-//     },
-//   })
-  // async find(
-  //   @param.filter(User) filter?: Filter<User>,
-  // ): Promise<User[]> {
-  //   return this.userRepository.find(filter);
+  @del('/user/DeleteStudent/{studentId}')
+  @response(204, {
+    description: 'Student DELETE success',
+  })
+  async deleteStudentById(
+    @param.path.string('studentId') id: string,
+  ): Promise<void> {
+    try {
+      await this.mainRepo.updateById(id, {status: deletedStatus});
+      await this.studentLessionRepo.updateAll(
+        {status: deletedStatus},
+        {studentId: id},
+      );
+    } catch (error) {
+      throw new HttpErrors.NotAcceptable(error);
+    }
+  }
+
+  // @del('/user')
+  // @response(204, {
+  //   description: 'User DELETE success',
+  // })
+  // async deleteUser(
+  //   @param.query.object("userFilter", UserFilter) filter: typeof UserFilter
+  //   ): Promise<string> {
+  //     try {
+  //       const numberOfObjectDeleted = await this.mainRepo.deleteAll(filter)
+  //       return `Deleted ${numberOfObjectDeleted.count} User`
+  //     } catch (error) {
+  //       throw new HttpErrors.NotAcceptable(error)
+  //     }
   // }
 
-//   @patch('/users')
-//   @response(200, {
-//     description: 'User PATCH success count',
-//     content: {'application/json': {schema: CountSchema}},
-//   })
-//   async updateAll(
-//     @requestBody({
-//       content: {
-//         'application/json': {
-//           schema: getModelSchemaRef(User, {partial: true}),
-//         },
-//       },
-//     })
-//     user: User,
-//     @param.where(User) where?: Where<User>,
-//   ): Promise<Count> {
-//     return this.userRepository.updateAll(user, where);
-//   }
+  @del('/user/DeleteTeacher/{teacherID}')
+  @response(204, {
+    description: 'Teacher DELETE success',
+  })
+  async deleteTeacherById(
+    @param.path.string('teacherID') id: string,
+  ): Promise<void> {
+    try {
+      const foundTeacher = await this.mainRepo.findById(id);
 
-//   @get('/users/{id}')
-//   @response(200, {
-//     description: 'User model instance',
-//     content: {
-//       'application/json': {
-//         schema: getModelSchemaRef(User, {includeRelations: true}),
-//       },
-//     },
-//   })
-//   async findById(
-//     @param.path.number('id') id: number,
-//     @param.filter(User, {exclude: 'where'}) filter?: FilterExcludingWhere<User>
-//   ): Promise<User> {
-//     return this.userRepository.findById(id, filter);
-//   }
+      if (foundTeacher.classRoomId) {
+        await Promise.all([
+          this.mainRepo.updateById(id, {status: deletedStatus}),
 
+          this.classRoomRepository.updateById(foundTeacher.classRoomId, {
+            status: deletedStatus,
+          }),
+        ]);
+      } else {
+        await this.mainRepo.updateById(id, {status: deletedStatus});
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
 
+  @del('user/DeleteManyTeacher')
+  @response(204, {
+    description: 'Teacher DELETE success',
+  })
+  async deleteManyTeacherById(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            items: getModelSchemaRef(User, {
+              exclude: [
+                'age',
+                'classRoomId',
+                'created',
+                'createdByID',
+                'email',
+                'gender',
+                'modified',
+                'modifiedByID',
+                'name',
+                'password',
+                'status',
+                'type',
+                'username',
+              ],
+            }),
+            type: 'array',
+          },
+        },
+      },
+    })
+    userarray: User[],
+  ): Promise<void> {
+    const type = 'Teacher';
 
-//   @put('/users/{id}')
-//   @response(204, {
-//     description: 'User PUT success',
-//   })
-//   async replaceById(
-//     @param.path.number('id') id: number,
-//     @requestBody() user: User,
-//   ): Promise<void> {
-//     await this.userRepository.replaceById(id, user);
-//   }
+    await this.userService.deActiveUser(userarray, type);
+  }
 
-//   @del('/users/{id}')
-//   @response(204, {
-//     description: 'User DELETE success',
-//   })
-//   async deleteById(@param.path.number('id') id: number): Promise<void> {
-//     await this.userRepository.deleteById(id);
-//   }
- }
+  @authenticate('jwt')
+  @del('user/DeleteManyStudent')
+  @response(204, {
+    description: 'Student DELETE success',
+  })
+  async deleteManyStudentById(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            type: 'array',
+          },
+        },
+      },
+    })
+    userarray: Array<string>,
+  ): Promise<void> {
+    await this.validService.authorizeTeacher();
+
+    const idArray = await this.userService.createIdArrayFromStringArray(
+      userarray,
+    );
+
+    await this.mainRepo.deleteAll({or: idArray});
+  }
+}
